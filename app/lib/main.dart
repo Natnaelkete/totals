@@ -1,0 +1,647 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:ffi';
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:network_info_plus/network_info_plus.dart';
+import 'package:totals/cli_output.dart';
+import 'package:another_telephony/telephony.dart';
+import 'package:shelf/shelf.dart' as shelf;
+import 'package:shelf/shelf_io.dart' as io;
+import 'package:shelf_router/shelf_router.dart' as shelfRouter;
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'package:intl/intl.dart';
+
+@pragma('vm:entry-point')
+onBackgroundMessage(SmsMessage message) async {
+  print("Received message in background from ${message.address}");
+  if (message.body == null) {
+    return;
+  }
+  if (!message.body!.contains("Dear Customer your Account")) {
+    return message;
+  }
+
+  try {
+    if (message.body?.isNotEmpty == true) {
+      var details = extractDetails(message.body!);
+      print(details);
+      if (details['amount'] != 'Not found' &&
+          details['reference'] != 'Not found' &&
+          details['creditor'] != 'Not found' &&
+          details['time'] != 'Not found') {
+        SharedPreferences prefs = await SharedPreferences.getInstance();
+        var transactionExists = prefs.getStringList("transactions") ?? [];
+        if (transactionExists.isNotEmpty) {
+          for (var i = 0; i < transactionExists.length; i++) {
+            var transaction = jsonDecode(transactionExists[i]);
+            if (transaction['reference'] == details['reference']) {
+              return;
+            }
+          }
+        }
+        transactionExists.add(jsonEncode(details));
+        await prefs.setStringList("transactions", transactionExists);
+        syncDataBackground();
+      }
+    }
+  } catch (e) {
+    print(e);
+  }
+  return message;
+}
+
+Future<void> syncDataBackground() async {
+  try {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+
+    // Retrieve existing transactions
+    List<String> existingTransactions =
+        prefs.getStringList('transactions') ?? [];
+
+    // Decode transactions
+    List<Map<String, dynamic>> transactionsInStore = (existingTransactions
+        .map((transaction) => json.decode(transaction) as Map<String, dynamic>)
+        .toList());
+    print(transactionsInStore);
+    // Filter out transactions that are not yet synced
+    List<Map<String, dynamic>> unsyncedTransactions = transactionsInStore
+        .where((transaction) => transaction['status'] != 'SYNCED')
+        .toList();
+    if (unsyncedTransactions.isEmpty) {
+      print("No transactions to sync.");
+      return;
+    }
+
+    final response = await http.post(
+      Uri.parse('https://cniff-admin.vercel.app/api/transactions'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'data': unsyncedTransactions}),
+    );
+    if (response.statusCode == 201) {
+      // Save the updated transactions back to shared preferences
+      var updatedTransactions = existingTransactions.map((e) {
+        var existingTransaction = json.decode(e);
+        // Check if the transaction is in the unsyncedTransactions list
+        var unsyncedTransaction = unsyncedTransactions.firstWhere(
+          (transaction) =>
+              transaction['reference'] == existingTransaction['reference'],
+          orElse: () => {},
+        );
+
+        // If a match is found in unsynced transactions, update it
+        if (unsyncedTransaction.isNotEmpty) {
+          existingTransaction['status'] = 'SYNCED'; // Update the status field
+          return json.encode(existingTransaction);
+        } else {
+          return e; // Return the original transaction if no match is found
+        }
+      }).toList();
+      print(updatedTransactions);
+
+      await prefs.setStringList('transactions', updatedTransactions);
+      await prefs.setString('last_sync', DateTime.now().toString());
+      print("Transactions synced successfully!");
+    } else {
+      throw Exception(
+          "Failed to sync transactions. Status: ${response.statusCode}");
+    }
+  } catch (e) {
+    print("Sync failed: $e");
+  } finally {}
+}
+
+Map<String, dynamic> extractDetails(String message) {
+  try {
+    // Extract amount
+    String amount = extractBetween(message, "ETB", "Ref:").trim();
+
+    // Extract reference number
+    String reference = extractBetween(message, "Ref:", "from").trim();
+
+    // Extract date and time
+    String dateTime = extractBetween(message, "ON", "BY").trim();
+
+    // Extract creditor
+    String creditor = extractBetween(message, "BY", ".").trim();
+
+    return {
+      'amount': amount,
+      'reference': reference,
+      'creditor': creditor,
+      'time': dateTime,
+      'status': "PENDING",
+    };
+  } catch (e) {
+    // Return an error status if parsing fails
+    return {
+      'amount': null,
+      'reference': null,
+      'creditor': null,
+      'time': null,
+      'status': "ERROR",
+    };
+  }
+}
+
+String extractBetween(String text, String startKeyword, String endKeyword) {
+  if (text.contains(startKeyword) && text.contains(endKeyword)) {
+    int startIndex = text.indexOf(startKeyword) + startKeyword.length;
+    int endIndex = text.indexOf(endKeyword, startIndex);
+    return text.substring(startIndex, endIndex).trim();
+  }
+  return "";
+}
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const MyApp());
+}
+
+class MyApp extends StatefulWidget {
+  const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+        title: 'Flutter Demo',
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+          useMaterial3: true,
+        ),
+        home: const HomePage());
+  }
+}
+
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
+  List<SmsMessage> receivedMessages = [];
+  List<SmsMessage> sentMessages = [];
+  String output = 'App launched\n';
+
+  bool serviceStarted = false;
+  String connectionStatus = "Server is offline";
+  String? wifiIp;
+  HttpServer? server;
+  String key = "transactions";
+  List<Map<String, dynamic>> transactions = [];
+  final telephony = Telephony.instance;
+  String lastSyncTime = '';
+  int transactionCount = 0;
+  double totalCredit = 0.0;
+  double currentBalance = 0.0;
+  DateTime? selectedDate = DateTime.now();
+  bool sortByCreditor = false;
+  Future<void> _selectDate(BuildContext context) async {
+    DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: selectedDate ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+
+    if (picked != null && picked != selectedDate) {
+      setState(() {
+        selectedDate = picked;
+      });
+      getItems();
+    }
+  }
+
+  onMessage(SmsMessage message) async {
+    print("Received new messages from ${message.address}");
+    try {
+      if (message.body?.isNotEmpty == true) {
+        var details = extractDetails(message.body!);
+        if (details['amount'] != 'Not found' &&
+            details['reference'] != 'Not found' &&
+            details['creditor'] != 'Not found' &&
+            details['time'] != 'Not found') {
+          print(details);
+          SharedPreferences prefs = await SharedPreferences.getInstance();
+          var transactionExists = prefs.getStringList(key) ?? [];
+          // check if there's a member with the same reference as the new one, if there is, skip
+          if (transactionExists.isNotEmpty) {
+            for (var i = 0; i < transactionExists.length; i++) {
+              var transaction = jsonDecode(transactionExists[i]);
+              if (transaction['reference'] == details['reference']) {
+                return;
+              }
+            }
+          }
+          transactionExists.add(jsonEncode(details));
+          print(transactionExists);
+          await prefs.setStringList(key, transactionExists);
+          print("saved");
+          getItems();
+        }
+      }
+    } catch (e) {
+      print(e);
+      updateOutput("Failed to send reply: ${e.toString()}");
+    }
+  }
+
+  void updateOutput(String newOutput) {
+    setState(() {
+      output +=
+          '> $newOutput [${DateFormat('yyyy-MM-dd kk:mm:ss').format(DateTime.now())}]\n';
+    });
+  }
+
+  Future<void> startServer() async {
+    final bool? result = await telephony.requestSmsPermissions;
+    print("telephony permission $result");
+
+    if (result != null && result) {
+      telephony.listenIncomingSms(
+          onNewMessage: onMessage, onBackgroundMessage: onBackgroundMessage);
+    } else {
+      updateOutput("permission denied");
+    }
+  }
+
+  void stopServer() {
+    server?.close(force: true);
+    debugPrint("server stopped");
+    updateOutput("Server stopped");
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this); // Add observer
+    startServer();
+    getItems();
+    syncData();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this); // Remove observer
+    super.dispose();
+  }
+
+  // This will be called when the app lifecycle changes (e.g., when the app comes to the foreground).
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    if (state == AppLifecycleState.resumed) {
+      // Refresh data whenever the app comes into view (resumed from background)
+      getItems();
+      syncData();
+    }
+  }
+
+  void getItems({String searchKey = ""}) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    List<String>? transactionExists = prefs.getStringList('transactions');
+
+    if (transactionExists != null) {
+      List<Map<String, dynamic>> filteredTransactions = transactionExists
+          .map((e) => jsonDecode(e) as Map<String, dynamic>) // Explicit cast
+          .toList();
+      // filter out only todays transaction
+      filteredTransactions = searchKey.isEmpty
+          ? filteredTransactions
+              .where((transaction) => transaction['time'].contains(
+                  DateFormat('dd MMM yyyy')
+                      .format(selectedDate ?? DateTime.now())
+                      .toUpperCase()))
+              .toList()
+          : filteredTransactions
+              .where((transaction) =>
+                  transaction['time'].contains(DateFormat('dd MMM yyyy')
+                      .format(selectedDate ?? DateTime.now())
+                      .toUpperCase()) &&
+                  (transaction['creditor']
+                          .toString()
+                          .toLowerCase()
+                          .contains(searchKey.toLowerCase()) ||
+                      transaction['reference']
+                          .toString()
+                          .toLowerCase()
+                          .contains(searchKey.toLowerCase())))
+              .toList();
+      print(filteredTransactions);
+      setState(() {
+        transactions = filteredTransactions;
+        if (searchKey.isEmpty) {
+          transactionCount = transactions.length;
+
+          totalCredit = transactions.fold(0.0, (sum, item) {
+            return sum + double.tryParse(item['amount'] ?? '0')!;
+          });
+
+          // Calculate current balance (could be based on your own logic)
+          currentBalance = totalCredit;
+        }
+      });
+      String last_sync_store = prefs.getString('last_sync') ?? '';
+      if (last_sync_store.isNotEmpty) {
+        lastSyncTime = last_sync_store.split(".")[0];
+      }
+    } else {
+      if (searchKey.isEmpty) {
+        setState(() {
+          transactions = [];
+          setState(() {
+            transactions = [];
+            transactionCount = 0;
+            totalCredit = 0.0;
+            currentBalance = 0.0;
+          });
+        });
+      }
+    }
+  }
+
+  bool isSyncing = false;
+
+  Future<void> syncData() async {
+    setState(() {
+      isSyncing = true;
+    });
+
+    try {
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+
+      // Retrieve existing transactions
+      List<String> existingTransactions =
+          prefs.getStringList('transactions') ?? [];
+
+      // Decode transactions
+      List<Map<String, dynamic>> transactionsInStore = (existingTransactions
+          .map(
+              (transaction) => json.decode(transaction) as Map<String, dynamic>)
+          .toList());
+      print(transactionsInStore);
+      // Filter out transactions that are not yet synced
+      List<Map<String, dynamic>> unsyncedTransactions = transactionsInStore
+          .where((transaction) => transaction['status'] != 'SYNCED')
+          .toList();
+      if (unsyncedTransactions.isEmpty) {
+        print("No transactions to sync.");
+        setState(() {
+          isSyncing = false;
+        });
+        return;
+      }
+
+      final response = await http.post(
+        Uri.parse('https://cniff-admin.vercel.app/api/transactions'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'data': unsyncedTransactions}),
+      );
+      if (response.statusCode == 201) {
+        // Save the updated transactions back to shared preferences
+        var updatedTransactions = existingTransactions.map((e) {
+          var existingTransaction = json.decode(e);
+          // Check if the transaction is in the unsyncedTransactions list
+          var unsyncedTransaction = unsyncedTransactions.firstWhere(
+            (transaction) =>
+                transaction['reference'] == existingTransaction['reference'],
+            orElse: () => {},
+          );
+
+          // If a match is found in unsynced transactions, update it
+          if (unsyncedTransaction.isNotEmpty) {
+            existingTransaction['status'] = 'SYNCED'; // Update the status field
+            return json.encode(existingTransaction);
+          } else {
+            return e; // Return the original transaction if no match is found
+          }
+        }).toList();
+        print(updatedTransactions);
+
+        await prefs.setStringList('transactions', updatedTransactions);
+        await prefs.setString('last_sync', DateTime.now().toString());
+        getItems();
+
+        print("Transactions synced successfully!");
+      } else {
+        throw Exception(
+            "Failed to sync transactions. Status: ${response.statusCode}");
+      }
+    } catch (e) {
+      print("Sync failed: $e");
+    } finally {
+      setState(() {
+        isSyncing = false;
+      });
+    }
+  }
+
+  String getTransactionStatus(String transactionTime) {
+    var day = transactionTime.split(" ")[0];
+    var month = transactionTime.split(" ")[1];
+    var year = transactionTime.split(" ")[2];
+
+    DateTime now = DateTime.now();
+    String formattedDate = DateFormat('dd MMM yyyy').format(now);
+    var nowDay = transactionTime.split(" ")[0];
+    var nowMonth = transactionTime.split(" ")[1];
+    var nowYear = transactionTime.split(" ")[2];
+
+    if (double.parse(nowYear) > double.parse(year)) {
+      return "CLEARED";
+    } else {
+      if (month != nowMonth) {
+        return "CLEARED";
+      } else {
+        if (double.parse(day) < double.parse(nowDay)) {
+          return "CLEARED";
+        } else {
+          return "PENDING";
+        }
+      }
+    }
+  }
+
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      floatingActionButton: SizedBox(
+        width: 65,
+        height: 65,
+        child: FloatingActionButton(
+          onPressed: () {
+            showModalBottomSheet(
+              isScrollControlled: true,
+              context: context,
+              builder: (context) {
+                return ClipRRect(
+                  borderRadius: BorderRadius.circular(15),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    height: MediaQuery.of(context).size.height * 0.75,
+                    //child: Text("form"),
+                  ),
+                );
+              },
+            );
+          },
+          backgroundColor: Color(0xFF294EC3),
+          shape: const CircleBorder(), // Makes it perfectly circular
+          child: const Icon(
+            Icons.add, // Changes menu icon to plus icon
+            color: Colors.white,
+            size: 24,
+          ),
+        ),
+      ),
+      appBar: AppBar(
+          backgroundColor: Colors.white, // Customize the background color
+          elevation: 4,
+          toolbarHeight: 60, // Adds a shadow for depth
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'TOTALS',
+                    style: TextStyle(
+                      fontSize: 20,
+                      color: Color(0xFF294EC3),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.lock_outline,
+                        color: Color(0xFF8DA1E1), size: 25),
+                    onPressed: () => _selectDate(context),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.search,
+                        color: Color(0xFF8DA1E1), size: 25),
+                    onPressed: () => _selectDate(context),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.calendar_month_outlined,
+                        color: Color(0xFF8DA1E1), size: 25),
+                    onPressed: () => _selectDate(context),
+                  ),
+                ],
+              ),
+            ],
+          )),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 10),
+          Card(
+              margin:
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              color: Colors.blueAccent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20.0),
+              ),
+              elevation: 1,
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFF172B6D), // Your first color
+                      Color(0xFF274AB9), // Your second color
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(20.0),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16.0, 28.0, 16.0, 28.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        mainAxisAlignment:
+                            MainAxisAlignment.center, // Centers horizontally
+                        children: [
+                          Text(
+                            'TOTAL BALANCE',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Color(0xFF9FABD2),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Icon(
+                            Icons
+                                .remove_red_eye_outlined, // You can change this icon
+                            size: 20,
+                            color: Color(0xFF9FABD2),
+                          ),
+                          SizedBox(
+                              width: 8), // Add spacing between icon and text
+                        ],
+                      ),
+                      const SizedBox(
+                        height: 4,
+                      ),
+                      Container(
+                        width: double.infinity,
+                        child: const Text(
+                          "1,345,234,312.93 ETB*",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              fontSize: 22,
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold
+                              // Subtle text color
+                              ),
+                        ),
+                      ),
+                      const SizedBox(
+                        height: 4,
+                      ),
+                      Container(
+                        width: double.infinity,
+                        child: const Text(
+                          "4 Banks | 8 Accounts",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFFF7F8FB),
+                            // Subtle text color
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )),
+        ],
+      ),
+    );
+  }
+}
