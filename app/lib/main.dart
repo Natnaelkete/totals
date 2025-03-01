@@ -338,7 +338,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           print(details);
           SharedPreferences prefs = await SharedPreferences.getInstance();
           var transactionExists = prefs.getStringList(key) ?? [];
-          // check if there's a member with the same reference as the new one, if there is, skip
           if (transactionExists.isNotEmpty) {
             for (var i = 0; i < transactionExists.length; i++) {
               var transaction = jsonDecode(transactionExists[i]);
