@@ -37,7 +37,8 @@ class _RegisterAccountFormState extends State<RegisterAccountForm> {
       bankAccounts.add(jsonEncode({
         "accountNumber": _accountNumber.text,
         "accountHolderName": _accountHolderName.text,
-        "bank": selected_bank
+        "bank": selected_bank,
+        "balance": 0
       }));
       await prefs.setStringList("accounts", bankAccounts);
       widget.onSubmit();

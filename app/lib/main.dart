@@ -324,6 +324,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         }
         print(details);
         allTransactions.add(jsonEncode(details));
+        // update account balance
         await prefs.setStringList(key, allTransactions);
         getItems();
         return;
