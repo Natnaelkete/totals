@@ -103,7 +103,7 @@ class _AccountDetailPageState extends State<AccountDetailPage> {
               reference: transaction['reference'],
               accountNumber: transaction['accountNumber'],
               creditor: transaction['creditor'],
-              amount: transaction['amount'] ?? 0,
+              amount: double.tryParse(transaction['amount'].toString()) ?? 0.0,
               time: DateTime.parse(transaction['time']),
               type: transaction['type'],
             ));

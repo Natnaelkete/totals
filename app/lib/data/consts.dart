@@ -20,7 +20,15 @@ class AppConstants {
       id: 1,
       name: "Commercial Bank Of Ethiopia",
       shortName: "CBE",
-      codes: ["CBE", "cbe", "889", "Commercial Bank Of Ethiopia"],
+      codes: [
+        "CBE",
+        "cbe",
+        "889",
+        "Commercial Bank Of Ethiopia",
+        "+251943685872",
+        "+251920945085",
+        "0920945085"
+      ],
       image: "assets/images/cbe.png",
     ),
     Bank(

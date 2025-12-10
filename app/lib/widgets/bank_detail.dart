@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:totals/data/consts.dart';
 import 'package:totals/main.dart';
+import 'package:totals/models/summary_models.dart';
 import 'package:totals/utils/text_utils.dart';
 import 'package:totals/widgets/accounts_summary.dart';
 

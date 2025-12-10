@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:totals/data/consts.dart';
 import 'package:totals/main.dart';
+import 'package:totals/models/summary_models.dart';
 import 'package:totals/utils/text_utils.dart';
 
 class BanksSummaryList extends StatefulWidget {
