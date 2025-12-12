@@ -13,27 +13,27 @@ import 'package:shared_preferences/shared_preferences.dart';
 @pragma('vm:entry-point')
 onBackgroundMessage(SmsMessage message) async {
   try {
-    print("BG: Handler started.");
+    print("debug: BG: Handler started.");
 
     final String? address = message.address;
-    print("BG: Address: '$address'");
+    print("debug: BG: Address: '$address'");
 
     final String? body = message.body;
     if (body == null) {
-      print("BG: Body is null. Exiting.");
+      print("debug: BG: Body is null. Exiting.");
       return;
     }
 
-    print("BG: Checking if relevant...");
+    print("debug: BG: Checking if relevant...");
     if (SmsService.isRelevantMessage(address)) {
-      print("BG: Message IS relevant. Processing...");
+      print("debug: BG: Message IS relevant. Processing...");
       await SmsService.processMessage(body, address!);
-      print("BG: Processing finished.");
+      print("debug: BG: Processing finished.");
     } else {
-      print("BG: Message NOT relevant.");
+      print("debug: BG: Message NOT relevant.");
     }
   } catch (e, stack) {
-    print("BG: CRITICAL ERROR: $e");
+    print("debug: BG: CRITICAL ERROR: $e");
     print(stack);
   }
 }
@@ -54,12 +54,12 @@ class SmsService {
         onBackgroundMessage: onBackgroundMessage,
       );
     } else {
-      print("SMS Permission denied");
+      print("debug: SMS Permission denied");
     }
   }
 
   void _handleForegroundMessage(SmsMessage message) async {
-    print("Foreground message from ${message.address}: ${message.body}");
+    print("debug: Foreground message from ${message.address}: ${message.body}");
     if (message.body == null) return;
 
     try {
@@ -70,7 +70,7 @@ class SmsService {
         }
       }
     } catch (e) {
-      print("Error processing foreground message: $e");
+      print("debug: Error processing foreground message: $e");
     }
   }
 
@@ -93,14 +93,43 @@ class SmsService {
     return null;
   }
 
+  static double sanitizeAmount(String? raw) {
+    if (raw == null) return 0.0;
+
+    String cleaned = raw.trim();
+
+    // Remove all characters except digits and decimal points
+    cleaned = cleaned.replaceAll(RegExp(r'[^0-9.]'), '');
+
+    // If multiple dots exist, keep only the first valid decimal
+    int firstDot = cleaned.indexOf('.');
+    if (firstDot != -1) {
+      // Remove all dots after the first one
+      cleaned = cleaned.substring(0, firstDot + 1) +
+          cleaned.substring(firstDot + 1).replaceAll('.', '');
+    }
+
+    // If the string ends with a dot, add a zero → "12." → "12.0"
+    if (cleaned.endsWith('.')) {
+      cleaned = cleaned + '0';
+    }
+
+    // If empty after cleaning, return 0
+    if (cleaned.isEmpty) return 0.0;
+
+    // Safe parse
+    return double.tryParse(cleaned) ?? 0.0;
+  }
+
   // Static processing logic so it can be used by background handler too.
   static Future<void> processMessage(
       String messageBody, String senderAddress) async {
-    print("Processing message: $messageBody");
+    print("debug: Processing message: $messageBody");
 
     Bank? bank = getRelevantBank(senderAddress);
     if (bank == null) {
-      print("No bank found for address $senderAddress - skipping processing.");
+      print(
+          "dubg: No bank found for address $senderAddress - skipping processing.");
       return;
     }
 
@@ -115,14 +144,11 @@ class SmsService {
         messageBody, senderAddress, relevantPatterns);
 
     if (details == null) {
-      print("No matching pattern found for message from $senderAddress");
-      // Fallback to legacy or exit?
-      // For now, let's try legacy if dynamic fails, just in case, or just return.
-      // Given we want to replace it, let's stick to dynamic.
+      print("debug: No matching pattern found for message from $senderAddress");
       return;
     }
 
-    print("Extracted details: $details");
+    print("debug: Extracted details: $details");
 
     // 3. Check duplicate transaction
     SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -133,7 +159,7 @@ class SmsService {
 
     String? newRef = details['reference'];
     if (newRef != null && existingTx.any((t) => t.reference == newRef)) {
-      print("Duplicate transaction skipped");
+      print("debug: Duplicate transaction skipped");
       return;
     }
 
@@ -146,54 +172,27 @@ class SmsService {
       List<Account> accounts = await accRepo.getAccounts();
 
       String extractedAccount = details['accountNumber'];
-      // Fuzzy match logic:
-      // If extracted is full account, match exact.
-      // If extracted is masked (1*****5345), match endsWith.
-
       int index = accounts.indexWhere((a) {
         if (a.bank != bankId) return false;
-
-        // Simple endsWith check is usually robust enough for masked accounts
-        // e.g. "5345" match "1000...5345"
-        // But the extracted might be "1*****5345".
-        // We should extract the last visible digits or just use endsWith if it's plain numbers.
-
-        // Let's strip non-digits to be safe for comparison if we had partials,
-        // but for now let's assume valid regex returns the relevant part.
-        // If regex returns "1*****5345", we can't match exact against "10001235345".
-        // Use last 4 digits comparison.
-
-        if (extractedAccount.length < 4) return false;
-        String last4 = extractedAccount.substring(extractedAccount.length - 4);
-        return a.accountNumber.endsWith(last4);
+        return a.accountNumber.endsWith(extractedAccount);
       });
 
       if (index != -1) {
         Account old = accounts[index];
-
-        // Parse balance from string to double if needed, depending on how PatternParser returns it
-        // PatternParser returns string for consistency with previous map, but let's check.
-        // Account model expects double for balance? No, local Account model has double balance.
-        // Details map has 'currentBalance' as String usually.
-
-        double newBalance =
-            double.tryParse(old.balance.replaceAll(',', '')) ?? 0.0;
-        if (details['currentBalance'] != null) {
-          newBalance = double.tryParse(
-                  details['currentBalance'].toString().replaceAll(',', '')) ??
-              newBalance;
-        }
+        double newBalance = details['currentBalance'] != null
+            ? sanitizeAmount(details['currentBalance'])
+            : old.balance;
 
         // Update balance
         Account updated = Account(
             accountNumber: old.accountNumber,
             bank: old.bank,
-            balance: newBalance.toString(),
+            balance: newBalance,
             accountHolderName: old.accountHolderName,
             settledBalance: old.settledBalance,
             pendingCredit: old.pendingCredit);
         await accRepo.saveAccount(updated);
-        print("Account balance updated for ${old.accountHolderName}");
+        print("debug: Account balance updated for ${old.accountHolderName}");
       } else {
         print(
             "No matching account found for bank $bankId and account $extractedAccount");
@@ -205,6 +204,6 @@ class SmsService {
     // Transaction.fromJson expects Strings mostly?
     Transaction newTx = Transaction.fromJson(details);
     await txRepo.saveTransaction(newTx);
-    print("New transaction saved: ${newTx.reference}");
+    print("debug: New transaction saved: ${newTx.reference}");
   }
 }

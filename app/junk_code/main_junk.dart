@@ -6,7 +6,7 @@
 // import 'package:shelf/shelf_io.dart' as io;
 
 // onBackgroundMessage(SmsMessage message) {
-//   debugPrint("onBackgroundMessage called");
+//   debugprint("debug: onBackgroundMessage called");
 // }
 
 // void main() {
@@ -60,13 +60,13 @@
 //     final NetworkInfo networkInfo = NetworkInfo();
 //     String? wifiIp = await networkInfo.getWifiIP();
 
-//     print("Wi-Fi IP: $wifiIp");
+//     print("debug: Wi-Fi IP: $wifiIp");
 //     var handler = const shelf.Pipeline()
 //         .addMiddleware(shelf.logRequests())
 //         .addHandler(_echoRequest);
 
 //     io.serve(handler, '0.0.0.0', 8080);
-//     print("server");
+//     print("debug: server");
 //   }
 
 //   shelf.Response _echoRequest(shelf.Request request) {
@@ -110,11 +110,11 @@
 //             "Hello world! (from the server) ${DateTime.now().hour}:${DateTime.now().minute}",
 //         statusListener: (SendStatus status) {
 //           if (status == SendStatus.DELIVERED) {
-//             print("SMS has been delivered!");
+//             print("debug: SMS has been delivered!");
 //           } else if (status == SendStatus.SENT) {
-//             print("SMS has been sents!");
+//             print("debug: SMS has been sents!");
 //           } else {
-//             print("Failed to send SMS!");
+//             print("debug: Failed to send SMS!");
 //           }
 //         },
 //       );
@@ -129,9 +129,9 @@
 //       final NetworkInfo networkInfo = NetworkInfo();
 //       String? wifiIp = await networkInfo.getWifiIP();
 
-//       print("Wi-Fi IP: $wifiIp");
+//       print("debug: Wi-Fi IP: $wifiIp");
 //       io.serve(handler, '0.0.0.0', 8081);
-//       print("server");
+//       print("debug: server");
 //     }
 
 //     return Scaffold(
@@ -175,11 +175,11 @@
 //                   message: "Hello world!",
 //                   statusListener: (SendStatus status) {
 //                     if (status == SendStatus.DELIVERED) {
-//                       print("SMS has been delivered!");
+//                       print("debug: SMS has been delivered!");
 //                     } else if (status == SendStatus.SENT) {
-//                       print("SMS has been sent!");
+//                       print("debug: SMS has been sent!");
 //                     } else {
-//                       print("Failed to send SMS!");
+//                       print("debug: Failed to send SMS!");
 //                     }
 //                   },
 //                 );

@@ -1,51 +1,17 @@
-import 'dart:convert';
-import 'dart:ffi';
-
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
+import 'package:totals/models/summary_models.dart';
 import 'package:totals/data/consts.dart';
+
+import 'package:totals/models/transaction.dart';
+import 'package:totals/providers/transaction_provider.dart';
 import 'package:totals/utils/text_utils.dart';
-
-class Account {
-  final String accountNumber;
-  final String accountHolderName;
-  final int bankId;
-  final double balance;
-  double totalCredit;
-  double totalDebit;
-
-  Account(
-      {required this.accountNumber,
-      required this.accountHolderName,
-      required this.bankId,
-      required this.totalCredit,
-      required this.totalDebit,
-      required this.balance});
-}
-
-class Transaction {
-  final String reference;
-  final String accountNumber;
-  final String? creditor;
-  final double amount;
-  final DateTime time;
-  final String type;
-
-  Transaction(
-      {required this.reference,
-      required this.accountNumber,
-      this.creditor,
-      required this.amount,
-      required this.time,
-      required this.type});
-}
 
 class AccountDetailPage extends StatefulWidget {
   final String accountNumber;
   final int bankId;
-  AccountDetailPage({required this.accountNumber, required this.bankId});
+  const AccountDetailPage(
+      {super.key, required this.accountNumber, required this.bankId});
 
   @override
   _AccountDetailPageState createState() => _AccountDetailPageState();
@@ -54,469 +20,427 @@ class AccountDetailPage extends StatefulWidget {
 class _AccountDetailPageState extends State<AccountDetailPage> {
   List<String> tabs = ["All Transactions", "Credits", "Debits"];
   String activeTab = "All Transactions";
-  List<Transaction> transactions = [];
-  List<Transaction> visibleTransaction = [];
+  String searchTerm = "";
   bool showTotalBalance = false;
-
-  Account? account;
   bool isExpanded = false;
 
   @override
   void initState() {
     super.initState();
-    getData();
-  }
-
-  void getData() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.reload();
-    Account? tempAccount;
-    List<String>? allAccounts = prefs.getStringList('accounts');
-
-    var allTransactions = prefs.getStringList("transactions") ?? [];
-    print(allTransactions);
-    List<Transaction> tempTransactions = [];
-
-    if (allAccounts != null) {
-      for (var a in allAccounts) {
-        var accountData = jsonDecode(a);
-        if (accountData['accountNumber'] == widget.accountNumber) {
-          tempAccount = Account(
-            accountHolderName: accountData['accountHolderName'],
-            accountNumber: accountData['accountNumber'],
-            balance: double.tryParse(accountData['balance']) ?? 0,
-            bankId: accountData['bank'],
-            totalCredit: accountData['totalCredit'] ?? 0,
-            totalDebit: accountData['totalDebit'] ?? 0,
-          );
-        }
-      }
-    }
-
-    if (allTransactions.isNotEmpty) {
-      for (var i = 0; i < allTransactions.length; i++) {
-        var transaction = jsonDecode(allTransactions[i]);
-        if (widget.bankId == 1) {
-          if (transaction['accountNumber'] ==
-              widget.accountNumber.substring(widget.accountNumber.length - 4)) {
-            tempTransactions.add(Transaction(
-              reference: transaction['reference'],
-              accountNumber: transaction['accountNumber'],
-              creditor: transaction['creditor'],
-              amount: double.tryParse(transaction['amount'].toString()) ?? 0.0,
-              time: DateTime.parse(transaction['time']),
-              type: transaction['type'],
-            ));
-          }
-        }
-      }
-    }
-
-    tempAccount?.totalCredit = tempTransactions
-        .where((element) => element.type == 'CREDIT')
-        .map((e) => e.amount)
-        .fold(
-            0, (previousValue, element) => (previousValue as double) + element);
-    tempAccount?.totalDebit = tempTransactions
-        .where((element) => element.type == 'DEBIT')
-        .map((e) => e.amount)
-        .fold(
-            0, (previousValue, element) => (previousValue as double) + element);
-
-    setState(() {
-      account = tempAccount;
-      transactions = tempTransactions;
-      visibleTransaction = transactions;
-    });
+    // No manual get data needed, rely on Provider
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-        backgroundColor: const Color(0xffF1F4FF),
-        appBar: AppBar(
-          backgroundColor: const Color(0xffF1F4FF),
-          scrolledUnderElevation: 0,
-          leading: IconButton(
-            icon: const Icon(
-              Icons.arrow_back,
-              color: Color(0xFF294EC3),
-            ),
-            onPressed: () {
-              Navigator.pop(context);
-            },
-          ),
-          title: const Text('Transaction History',
-              style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w500,
-                  color: Color(0xFF294EC3))),
+    return Consumer<TransactionProvider>(builder: (context, provider, child) {
+      // 1. Find the AccountSummary
+      final accountSummary = provider.accountSummaries.firstWhere(
+        (a) => a.accountNumber == widget.accountNumber,
+        orElse: () => AccountSummary(
+          bankId: widget.bankId,
+          accountNumber: widget.accountNumber,
+          accountHolderName: "Unknown",
+          totalTransactions: 0,
+          totalCredit: 0,
+          totalDebit: 0,
+          settledBalance: 0,
+          balance: 0,
+          pendingCredit: 0,
         ),
-        body: SingleChildScrollView(
-            child: Column(
-          children: [
-            Container(
-                padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(color: Colors.grey[500]!, width: .2),
+      );
+
+      // 2. Filter Transactions for this account
+      // Use helper logic similar to provider to match account
+      List<Transaction> transactions = provider.allTransactions.where((t) {
+        if (t.bankId != widget.bankId) return false;
+
+        // Simple match or suffix match for CBE
+        // Assuming widget.accountNumber is the full number from the summary
+        if (widget.bankId == 1 && widget.accountNumber.length >= 4) {
+          // If transaction account number is short (suffix), match suffix
+          // If transaction account number is full, match full
+          // The provider logic was: t.accountNumber == account.accountNumber.substring(...)
+          // Let's replicate or simplify.
+          // If t.accountNumber is "5345" and widget.accountNumber is "1000...5345", matches.
+          if (t.accountNumber != null &&
+              t.accountNumber!.length < widget.accountNumber.length) {
+            return widget.accountNumber.endsWith(t.accountNumber!);
+          }
+        }
+        return t.accountNumber == widget.accountNumber;
+      }).toList();
+
+      // 3. Local Search & Tab Filter
+      List<Transaction> visibleTransaction = transactions;
+
+      // Apply Search
+      if (searchTerm.isNotEmpty) {
+        visibleTransaction = visibleTransaction
+            .where((t) =>
+                (t.creditor?.toLowerCase().contains(searchTerm.toLowerCase()) ??
+                    false) ||
+                (t.reference
+                        ?.toLowerCase()
+                        .contains(searchTerm.toLowerCase()) ??
+                    false))
+            .toList();
+      }
+
+      // Apply Tabs
+      if (activeTab == "Credits") {
+        visibleTransaction =
+            visibleTransaction.where((t) => t.type == "CREDIT").toList();
+      } else if (activeTab == "Debits") {
+        visibleTransaction =
+            visibleTransaction.where((t) => t.type == "DEBIT").toList();
+      }
+
+      // Sort by date desc
+      visibleTransaction.sort((a, b) =>
+          (DateTime.tryParse(b.time ?? "") ?? DateTime(0))
+              .compareTo(DateTime.tryParse(a.time ?? "") ?? DateTime(0)));
+
+      return Scaffold(
+          backgroundColor: const Color(0xffF1F4FF),
+          appBar: AppBar(
+            backgroundColor: const Color(0xffF1F4FF),
+            scrolledUnderElevation: 0,
+            leading: IconButton(
+              icon: const Icon(
+                Icons.arrow_back,
+                color: Color(0xFF294EC3),
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+              },
+            ),
+            title: const Text('Transaction History',
+                style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF294EC3))),
+          ),
+          body: SingleChildScrollView(
+              child: Column(
+            children: [
+              Container(
+                  padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(color: Colors.grey[500]!, width: .2),
+                    ),
                   ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: List.generate(tabs.length, (index) {
-                    return Container(
-                        decoration: BoxDecoration(
-                          border: Border(
-                            bottom: BorderSide(
-                                color: activeTab == tabs[index]
-                                    ? Color(0xFF294EC3)
-                                    : Colors.transparent,
-                                width: activeTab == tabs[index] ? 2 : 0),
-                          ),
-                        ),
-                        child: TextButton(
-                          onPressed: () {
-                            setState(() {
-                              activeTab = tabs[index];
-                              if (index == 1) {
-                                visibleTransaction = transactions
-                                    .where(
-                                        (element) => element.type == 'CREDIT')
-                                    .toList();
-                              } else if (index == 2) {
-                                visibleTransaction = transactions
-                                    .where((element) => element.type == 'DEBIT')
-                                    .toList();
-                              } else {
-                                visibleTransaction = transactions;
-                              }
-                            });
-                          },
-                          style: TextButton.styleFrom(
-                            foregroundColor: activeTab == tabs[index]
-                                ? Color(0xFF294EC3)
-                                : Color(0xFF444750),
-                            textStyle: TextStyle(fontSize: 14),
-                          ),
-                          child: Text(tabs[index]),
-                        ));
-                  }),
-                )),
-            const SizedBox(height: 10),
-            account?.accountHolderName != null &&
-                    account?.accountHolderName != null &&
-                    account?.bankId != null
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                        Card(
-                            margin: const EdgeInsets.symmetric(
-                                horizontal: 16.0, vertical: 8.0),
-                            color: Colors.blueAccent,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: List.generate(tabs.length, (index) {
+                      return Container(
+                          decoration: BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(
+                                  color: activeTab == tabs[index]
+                                      ? Color(0xFF294EC3)
+                                      : Colors.transparent,
+                                  width: activeTab == tabs[index] ? 2 : 0),
                             ),
-                            elevation: 1,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    Color(0xFF172B6D), // Your first color
-                                    Color(0xFF274AB9), // Your second color
-                                  ],
-                                ),
-                                borderRadius: BorderRadius.circular(20.0),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                    16.0, 28.0, 16.0, 28.0),
-                                child: Column(
-                                  children: [
-                                    Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.center,
-                                        children: [
-                                          SizedBox(
-                                            width: 60,
-                                            height: 60,
-                                            child: ClipRRect(
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                              child: Image.asset(
+                          ),
+                          child: TextButton(
+                            onPressed: () {
+                              setState(() {
+                                activeTab = tabs[index];
+                                // Filtering handled in build
+                              });
+                            },
+                            style: TextButton.styleFrom(
+                              foregroundColor: activeTab == tabs[index]
+                                  ? Color(0xFF294EC3)
+                                  : Color(0xFF444750),
+                              textStyle: TextStyle(fontSize: 14),
+                            ),
+                            child: Text(tabs[index]),
+                          ));
+                    }),
+                  )),
+              const SizedBox(height: 10),
+              // Use accountSummary fields
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Card(
+                    margin: const EdgeInsets.symmetric(
+                        horizontal: 16.0, vertical: 8.0),
+                    color: Colors.blueAccent,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20.0),
+                    ),
+                    elevation: 1,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Color(0xFF172B6D), // Your first color
+                            Color(0xFF274AB9), // Your second color
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(20.0),
+                      ),
+                      child: Padding(
+                        padding:
+                            const EdgeInsets.fromLTRB(16.0, 28.0, 16.0, 28.0),
+                        child: Column(
+                          children: [
+                            Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  SizedBox(
+                                    width: 60,
+                                    height: 60,
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Image.asset(
+                                        AppConstants.banks
+                                            .firstWhere((element) =>
+                                                element.id == widget.bankId)
+                                            .image,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.center,
+                                          children: [
+                                            Expanded(
+                                              child: Text(
                                                 AppConstants.banks
                                                     .firstWhere((element) =>
                                                         element.id ==
                                                         widget.bankId)
-                                                    .image,
-                                                fit: BoxFit.cover,
+                                                    .name,
+                                                style: const TextStyle(
+                                                  fontSize: 16,
+                                                  color: Color(0xFFF7F8FB),
+                                                  // Subtle text color
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
                                               ),
                                             ),
+                                            const SizedBox(width: 8),
+                                            GestureDetector(
+                                                onTap: () {
+                                                  setState(() {
+                                                    isExpanded = !isExpanded;
+                                                  });
+                                                },
+                                                child: Icon(
+                                                  isExpanded
+                                                      ? Icons.keyboard_arrow_up
+                                                      : Icons
+                                                          .keyboard_arrow_down,
+                                                  color: Colors.white,
+                                                  size: 28,
+                                                ))
+                                          ],
+                                        ),
+                                        const SizedBox(
+                                          height: 4,
+                                        ),
+                                        Text(
+                                          accountSummary.accountNumber,
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            color: Color(0xFF9FABD2),
+                                            fontWeight: FontWeight.w500,
                                           ),
-                                          SizedBox(width: 16),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Row(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment
-                                                          .spaceBetween,
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.center,
-                                                  children: [
-                                                    Expanded(
-                                                      child: Text(
-                                                        AppConstants.banks
-                                                            .firstWhere(
-                                                                (element) =>
-                                                                    element
-                                                                        .id ==
-                                                                    widget
-                                                                        .bankId)
-                                                            .name,
-                                                        style: const TextStyle(
-                                                          fontSize: 16,
-                                                          color:
-                                                              Color(0xFFF7F8FB),
-                                                          // Subtle text color
-                                                        ),
-                                                        overflow: TextOverflow
-                                                            .ellipsis,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 8),
-                                                    GestureDetector(
-                                                        onTap: () {
-                                                          setState(() {
-                                                            isExpanded =
-                                                                !isExpanded;
-                                                          });
-                                                        },
-                                                        child: Icon(
-                                                          isExpanded
-                                                              ? Icons
-                                                                  .keyboard_arrow_up
-                                                              : Icons
-                                                                  .keyboard_arrow_down,
-                                                          color: Colors.white,
-                                                          size: 28,
-                                                        ))
-                                                  ],
-                                                ),
-                                                const SizedBox(
-                                                  height: 4,
-                                                ),
-                                                Text(
-                                                  account?.accountNumber ?? '',
-                                                  style: const TextStyle(
-                                                    fontSize: 14,
-                                                    color: Color(0xFF9FABD2),
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                ),
-                                                Text(
-                                                  account?.accountHolderName ??
-                                                      '',
-                                                  style: const TextStyle(
-                                                    fontSize: 14,
-                                                    color: Color(0xFF9FABD2),
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                ),
-                                                Row(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment
-                                                          .spaceBetween,
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.center,
-                                                  children: [
-                                                    Text(
-                                                      "${showTotalBalance ? formatNumberWithComma(account?.balance) : '*' * account!.balance.toString().length} ETB" ??
-                                                          "0 ETB",
-                                                      style: const TextStyle(
-                                                        fontSize: 14,
-                                                        color:
-                                                            Color(0xFFF7F8FB),
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 8),
-                                                    GestureDetector(
-                                                        onTap: () {
-                                                          setState(() {
-                                                            showTotalBalance =
-                                                                !showTotalBalance;
-                                                          });
-                                                        },
-                                                        child: Icon(
-                                                            showTotalBalance ==
-                                                                    true
-                                                                ? Icons
-                                                                    .visibility_off
-                                                                : Icons
-                                                                    .remove_red_eye_outlined,
-                                                            color: Colors
-                                                                .grey[400],
-                                                            size: 20))
-                                                  ],
-                                                ),
-                                              ],
+                                        ),
+                                        Text(
+                                          accountSummary.accountHolderName,
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            color: Color(0xFF9FABD2),
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.center,
+                                          children: [
+                                            Text(
+                                              "${showTotalBalance ? formatNumberWithComma(accountSummary.balance) : '*' * ((accountSummary.balance).toString()).length} ETB",
+                                              style: const TextStyle(
+                                                fontSize: 14,
+                                                color: Color(0xFFF7F8FB),
+                                              ),
                                             ),
-                                          )
-                                        ]),
-                                    isExpanded
-                                        ? Column(
-                                            children: [
-                                              const SizedBox(
-                                                height: 12,
-                                              ),
-                                              Row(
-                                                mainAxisAlignment: MainAxisAlignment
-                                                    .spaceBetween, // Centers horizontally
-                                                children: [
-                                                  Text(
-                                                    "Total Credit",
-                                                    style: TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 14,
-                                                    ),
-                                                  ),
-                                                  Text(
-                                                      "${account?.totalCredit.toString()} ETB" ??
-                                                          '',
-                                                      style: const TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        color: Colors.white,
-                                                        fontSize: 14,
-                                                      )),
-                                                ],
-                                              ),
-                                              Row(
-                                                mainAxisAlignment: MainAxisAlignment
-                                                    .spaceBetween, // Centers horizontally
-                                                children: [
-                                                  const Text(
-                                                    "Total Debit",
-                                                    style: TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 14,
-                                                    ),
-                                                  ),
-                                                  Text(
-                                                      "${account?.totalDebit.toString()} ETB" ??
-                                                          '',
-                                                      style: const TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        color: Colors.white,
-                                                        fontSize: 14,
-                                                      )),
-                                                ],
-                                              )
-                                            ],
-                                          )
-                                        : Container()
-                                  ],
-                                ),
-                              ),
-                            )),
-                        Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 20),
-                          child: Column(children: [
-                            TextField(
-                              onChanged: (value) {
-                                setState(() {
-                                  visibleTransaction = transactions
-                                      .where((element) => element.reference
-                                          .toLowerCase()
-                                          .contains(value.toLowerCase()))
-                                      .toList();
-                                });
-                              },
-                              decoration: InputDecoration(
-                                hintText: 'Search for Transactions',
-                                hintStyle: TextStyle(
-                                  color: Colors.grey.shade400,
-                                  fontWeight: FontWeight.w300,
-                                ),
-                                contentPadding:
-                                    const EdgeInsets.symmetric(vertical: 6),
-                                border: UnderlineInputBorder(
-                                  borderSide: BorderSide(
-                                      color: Colors.grey.shade400, width: 1),
-                                ),
-                                enabledBorder: UnderlineInputBorder(
-                                  borderSide: BorderSide(
-                                      color: Colors.grey.shade400, width: 1),
-                                ),
-                                focusedBorder: const UnderlineInputBorder(
-                                  borderSide: BorderSide(
-                                      color: Colors.blue, width: 1.5),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            SizedBox(
-                              height: MediaQuery.of(context).size.height *
-                                  0.5, // ✅ Give height
-
-                              child: ListView.builder(
-                                shrinkWrap: true,
-                                itemCount: visibleTransaction.length,
-                                itemBuilder: (context, index) {
-                                  Transaction transaction =
-                                      visibleTransaction[index];
-                                  return Card(
-                                    margin: const EdgeInsets.symmetric(
-                                        vertical: 8.0),
-                                    child: ListTile(
-                                      subtitle: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
+                                            const SizedBox(width: 8),
+                                            GestureDetector(
+                                                onTap: () {
+                                                  setState(() {
+                                                    showTotalBalance =
+                                                        !showTotalBalance;
+                                                  });
+                                                },
+                                                child: Icon(
+                                                    showTotalBalance == true
+                                                        ? Icons.visibility_off
+                                                        : Icons
+                                                            .remove_red_eye_outlined,
+                                                    color: Colors.grey[400],
+                                                    size: 20))
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                ]),
+                            isExpanded
+                                ? Column(
+                                    children: [
+                                      const SizedBox(
+                                        height: 12,
+                                      ),
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment
+                                            .spaceBetween, // Centers horizontally
                                         children: [
                                           Text(
-                                            transaction.creditor
-                                                    ?.toUpperCase() ??
-                                                '',
+                                            "Total Credit",
                                             style: TextStyle(
-                                                fontWeight: FontWeight.w600),
+                                              color: Colors.white,
+                                              fontSize: 14,
+                                            ),
                                           ),
                                           Text(
-                                              '${formatTime(transaction.time.toString())}'),
-                                          Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              Text('${transaction.reference}'),
-                                              Text(
-                                                '${transaction.type == 'CREDIT' ? "+" : "-"} ${formatNumberWithComma(transaction.amount)} ETB',
-                                                style: TextStyle(
-                                                    fontWeight: FontWeight.w500,
-                                                    color: transaction.type ==
-                                                            'CREDIT'
-                                                        ? Colors.green
-                                                        : Colors.red),
-                                              ),
-                                            ],
-                                          )
+                                              "${formatNumberWithComma(accountSummary.totalCredit)} ETB",
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.white,
+                                                fontSize: 14,
+                                              )),
                                         ],
                                       ),
-                                    ),
-                                  );
-                                },
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment
+                                            .spaceBetween, // Centers horizontally
+                                        children: [
+                                          const Text(
+                                            "Total Debit",
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                          Text(
+                                              "${formatNumberWithComma(accountSummary.totalDebit)} ETB",
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.white,
+                                                fontSize: 14,
+                                              )),
+                                        ],
+                                      )
+                                    ],
+                                  )
+                                : Container()
+                          ],
+                        ),
+                      ),
+                    )),
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(children: [
+                    TextField(
+                      onChanged: (value) {
+                        setState(() {
+                          searchTerm = value;
+                        });
+                      },
+                      decoration: InputDecoration(
+                        hintText: 'Search for Transactions',
+                        hintStyle: TextStyle(
+                          color: Colors.grey.shade400,
+                          fontWeight: FontWeight.w300,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 6),
+                        border: UnderlineInputBorder(
+                          borderSide:
+                              BorderSide(color: Colors.grey.shade400, width: 1),
+                        ),
+                        enabledBorder: UnderlineInputBorder(
+                          borderSide:
+                              BorderSide(color: Colors.grey.shade400, width: 1),
+                        ),
+                        focusedBorder: const UnderlineInputBorder(
+                          borderSide:
+                              BorderSide(color: Colors.blue, width: 1.5),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      height: MediaQuery.of(context).size.height *
+                          0.5, // ✅ Give height
+
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: visibleTransaction.length,
+                        itemBuilder: (context, index) {
+                          Transaction transaction = visibleTransaction[index];
+                          return Card(
+                            margin: const EdgeInsets.symmetric(vertical: 8.0),
+                            child: ListTile(
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    transaction.creditor?.toUpperCase() ?? '',
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.w600),
+                                  ),
+                                  Text(
+                                      '${formatTime(transaction.time.toString())}'),
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                          child: Text(
+                                        '${transaction.reference}',
+                                        overflow: TextOverflow.ellipsis,
+                                      )),
+                                      Text(
+                                        '${transaction.type == 'CREDIT' ? "+" : "-"} ${formatNumberWithComma(double.tryParse(transaction.amount ?? "0"))} ETB',
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.w500,
+                                            color: transaction.type == 'CREDIT'
+                                                ? Colors.green
+                                                : Colors.red),
+                                      ),
+                                    ],
+                                  )
+                                ],
                               ),
                             ),
-                          ]),
-                        ),
-                      ])
-                : Container(),
-          ],
-        )));
+                          );
+                        },
+                      ),
+                    ),
+                  ]),
+                ),
+              ])
+            ],
+          )));
+    });
   }
 }

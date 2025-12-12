@@ -23,7 +23,11 @@ class TransactionProvider with ChangeNotifier {
   DateTime _selectedDate = DateTime.now();
 
   // Getters
+  List<Transaction> _allTransactions = [];
+
+  // Getters
   List<Transaction> get transactions => _transactions;
+  List<Transaction> get allTransactions => _allTransactions;
   bool get isLoading => _isLoading;
   AllSummary? get summary => _summary;
   List<BankSummary> get bankSummaries => _bankSummaries;
@@ -36,13 +40,12 @@ class TransactionProvider with ChangeNotifier {
 
     try {
       _accounts = await _accountRepo.getAccounts();
-      List<Transaction> allTransactions =
-          await _transactionRepo.getTransactions();
+      _allTransactions = await _transactionRepo.getTransactions();
 
-      _calculateSummaries(allTransactions);
-      _filterTransactions(allTransactions);
+      _calculateSummaries(_allTransactions);
+      _filterTransactions(_allTransactions);
     } catch (e) {
-      print("Error loading data: $e");
+      print("debug: Error loading data: $e");
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -94,8 +97,7 @@ class TransactionProvider with ChangeNotifier {
           accounts.fold(0.0, (sum, a) => sum + (a.settledBalance ?? 0.0));
       double pendingCredit =
           accounts.fold(0.0, (sum, a) => sum + (a.pendingCredit ?? 0.0));
-      double totalBalance = accounts.fold(
-          0.0, (sum, a) => sum + (double.tryParse(a.balance) ?? 0.0));
+      double totalBalance = accounts.fold(0.0, (sum, a) => sum + a.balance);
 
       return BankSummary(
         bankId: bankId,
@@ -126,6 +128,19 @@ class TransactionProvider with ChangeNotifier {
           return t.accountNumber == account.accountNumber;
         }
       }).toList();
+
+      // Fallback: If this is the ONLY account for this bank, also include transactions with NULL account number
+      // This handles legacy data or parsing failures where account wasn't captured.
+      var bankAccounts =
+          _accounts.where((a) => a.bank == account.bank).toList();
+      if (bankAccounts.length == 1 && bankAccounts.first == account) {
+        var orphanedTransactions = allTransactions
+            .where((t) =>
+                t.bankId == account.bank &&
+                (t.accountNumber == null || t.accountNumber!.isEmpty))
+            .toList();
+        accountTransactions.addAll(orphanedTransactions);
+      }
 
       double totalDebit = 0.0;
       double totalCredit = 0.0;

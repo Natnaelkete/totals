@@ -3,7 +3,7 @@ import 'dart:convert';
 class Account {
   final String accountNumber;
   final int bank; // Mapped to 'bank' in JSON
-  final String balance; // Kept as String?
+  final double balance;
   final String accountHolderName;
   final double? settledBalance;
   final double? pendingCredit;
@@ -21,7 +21,7 @@ class Account {
     return Account(
       accountNumber: json['accountNumber'],
       bank: json['bank'],
-      balance: json['balance'],
+      balance: double.tryParse(json['balance'].toString()) ?? 0.0,
       accountHolderName: json['accountHolderName'],
       settledBalance: json['settledBalance']?.toDouble(),
       pendingCredit: json['pendingCredit']?.toDouble(),

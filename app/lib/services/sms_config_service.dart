@@ -3,15 +3,34 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:totals/models/sms_pattern.dart';
 
 class SmsConfigService {
-  static const String _storageKey = "sms_patterns_config";
+  static const String _storageKey = "sms_patterns_config_v3";
   static final List<SmsPattern> _defaultPatterns = [
     // --- CBE Patterns ---
+    // Try to capture account number if possible (1*****5345)
+    // moved to top to ensure priority
+    SmsPattern(
+      bankId: 1,
+      senderId: "CBE",
+      regex:
+          r"(?:Account|Acct)\s+(?<account>[\d\*]+).*?credited\s+with\s+ETB\s?(?<amount>[\d,.]+).*?Balance\s+is\s+ETB\s?(?<balance>[\d,.]+).*?((id=|BranchReceipt/)(?<reference>FT\w+))",
+      type: "CREDIT",
+      description: "CBE Credit with Account",
+    ),
+    SmsPattern(
+      bankId: 1,
+      senderId: "CBE",
+      regex:
+          r"(?:Account|Acct)\s+(?<account>[\d\*]+).*?debited\s+with\s+ETB\s?(?<amount>[\d,.]+).*?Balance\s+is\s+ETB\s?(?<balance>[\d,.]+).*?((id=|BranchReceipt/)(?<reference>FT\w+))",
+      type: "DEBIT",
+      description: "CBE Debit with Account",
+    ),
+
     SmsPattern(
       bankId: 1,
       senderId: "CBE",
       // "credited with ETB 17000.00"
       regex:
-          r"credited\s+with\s+ETB\s?(?<amount>[\d,.]+).*?Balance\s+is\s+ETB\s?(?<balance>[\d,.]+)",
+          r"credited\s+with\s+ETB\s?(?<amount>[\d,.]+).*?Balance\s+is\s+ETB\s?(?<balance>[\d,.]+).*?((id=|BranchReceipt/)(?<reference>FT\w+))",
       type: "CREDIT",
       description: "CBE Credit Basic",
     ),
@@ -20,35 +39,17 @@ class SmsConfigService {
       senderId: "CBE",
       // "debited with ETB3,000.00"
       regex:
-          r"debited\s+with\s+ETB\s?(?<amount>[\d,.]+).*?Balance\s+is\s+ETB\s?(?<balance>[\d,.]+)",
+          r"debited\s+with\s+ETB\s?(?<amount>[\d,.]+).*?Balance\s+is\s+ETB\s?(?<balance>[\d,.]+).*?((id=|BranchReceipt/)(?<reference>FT\w+))",
       type: "DEBIT",
       description: "CBE Debit Basic",
     ),
     SmsPattern(
       bankId: 1,
       senderId: "CBE",
-      // "transfered ETB 10,000.00 to ..." (Note spelling 'transfered')
       regex:
-          r"transfered\s+ETB\s?(?<amount>[\d,.]+)\s+to.*Balance\s+is\s+ETB\s?(?<balance>[\d,.]+)",
+          r"transfered\s+ETB\s?(?<amount>[\d,.]+)\s+to.*?from\s+your\s+account\s+(?<account>[\d\*]+).*?Balance\s+is\s+ETB\s?(?<balance>[\d,.]+).*?((id=|BranchReceipt/)(?<reference>FT\w+))",
       type: "DEBIT",
       description: "CBE Transfer Debit",
-    ),
-    // Try to capture account number if possible (1*****5345)
-    SmsPattern(
-      bankId: 1,
-      senderId: "CBE",
-      regex:
-          r"Account\s+(?<account>\d+\*{3,}\d+).*?credited\s+with\s+ETB\s?(?<amount>[\d,.]+).*?Balance\s+is\s+ETB\s?(?<balance>[\d,.]+)",
-      type: "CREDIT",
-      description: "CBE Credit with Account",
-    ),
-    SmsPattern(
-      bankId: 1,
-      senderId: "CBE",
-      regex:
-          r"Account\s+(?<account>\d+\*{3,}\d+).*?debited\s+with\s+ETB\s?(?<amount>[\d,.]+).*?Balance\s+is\s+ETB\s?(?<balance>[\d,.]+)",
-      type: "DEBIT",
-      description: "CBE Debit with Account",
     ),
 
     // --- Telebirr Patterns ---
@@ -91,18 +92,6 @@ class SmsConfigService {
   ];
 
   Future<List<SmsPattern>> getPatterns() async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-    final List<String>? cachedFn = prefs.getStringList(_storageKey);
-    if (cachedFn != null && cachedFn.isNotEmpty) {
-      try {
-        return cachedFn.map((s) => SmsPattern.fromJson(jsonDecode(s))).toList();
-      } catch (e) {
-        print("Error parsing cached patterns: $e");
-      }
-    }
-
-    // Save defaults to cache so we have a baseline
-    await savePatterns(_defaultPatterns);
     return _defaultPatterns;
   }
 

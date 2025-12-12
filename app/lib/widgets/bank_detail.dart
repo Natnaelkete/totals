@@ -153,8 +153,8 @@ class _BankDetailState extends State<BankDetail> {
                                           0.0,
                                           (sum, bank) =>
                                               sum +
-                                              double.tryParse(bank
-                                                  .balance)!) // Replace with your actual balance calculation logic
+                                              bank
+                                                  .balance) // Replace with your actual balance calculation logic
                                       .toString())) +
                                   " ETB"
                               : "*" *
@@ -163,8 +163,7 @@ class _BankDetailState extends State<BankDetail> {
                                           0.0,
                                           (sum, bank) =>
                                               sum +
-                                              double.tryParse(bank
-                                                  .balance)!) // Replace with your actual balance calculation logic
+                                              bank.balance) // Replace with your actual balance calculation logic
                                       .toString()
                                       .length,
                           textAlign: TextAlign.center,

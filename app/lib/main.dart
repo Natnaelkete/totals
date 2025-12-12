@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:totals/providers/transaction_provider.dart';
 import 'package:totals/screens/home_page.dart';
-import 'package:totals/services/sms_service.dart'; // Import for onBackgroundMessage if needed for some plugins, but here mostly for side effects if any.
+import 'package:totals/services/sms_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

@@ -18,7 +18,7 @@ class AuthService {
         ),
       );
     } catch (e) {
-      print("Authentication error: $e");
+      print("debug: Authentication error: $e");
       return false;
     }
   }

@@ -11,6 +11,8 @@ class PatternParser {
     String cleanBody = messageBody.trim();
 
     for (var pattern in patterns) {
+      print("debug: Pattern Regex: ${pattern.regex}");
+
       // 2. Try to match regex
       try {
         RegExp regExp = RegExp(pattern.regex,
@@ -18,7 +20,8 @@ class PatternParser {
         RegExpMatch? match = regExp.firstMatch(cleanBody);
 
         if (match != null) {
-          print("Pattern Matched: ${pattern.description}");
+          print("debug: ✓ Pattern Matched: ${pattern.description}");
+          print("debug: Available named groups: ${match.groupNames.toList()}");
 
           final Map<String, dynamic> extracted = {};
 
@@ -30,16 +33,39 @@ class PatternParser {
 
           if (match.groupNames.contains('amount')) {
             extracted['amount'] = _cleanNumber(match.namedGroup('amount'));
+            print("debug: Extracted amount: ${extracted['amount']}");
           }
           if (match.groupNames.contains('balance')) {
             extracted['currentBalance'] =
                 _cleanNumber(match.namedGroup('balance'));
+            print("debug: Extracted balance: ${extracted['currentBalance']}");
           }
           if (match.groupNames.contains('account')) {
-            extracted['accountNumber'] = match.namedGroup('account');
+            print("debug: ✓ after account - entering account extraction block");
+            String? raw = match.namedGroup('account');
+            print("debug: Raw account value: '$raw'");
+
+            if (raw != null) {
+              // specific cleanup for masked accounts (CBE style 1000***1234)
+              if (pattern.bankId == 1) {
+                extracted['accountNumber'] = raw.substring(raw.length - 4);
+                print(
+                    "Cleaned account (masked): ${extracted['accountNumber']}");
+              } else {
+                extracted['accountNumber'] = raw;
+                print(
+                    "Cleaned account (direct): ${extracted['accountNumber']}");
+              }
+            } else {
+              print("debug: ✗ Raw account is null!");
+            }
+          } else {
+            print("debug: ✗ 'account' group NOT found in named groups");
           }
+
           if (match.groupNames.contains('reference')) {
             extracted['reference'] = match.namedGroup('reference');
+            print("debug: Extracted reference: ${extracted['reference']}");
           }
           if (match.groupNames.contains('creditor')) {
             extracted['creditor'] = match.namedGroup('creditor');
@@ -54,23 +80,34 @@ class PatternParser {
             extracted['time'] = DateTime.now().toIso8601String();
           }
 
+          print("debug: account ${extracted["accountNumber"]}");
+          print("debug: amount ${extracted["amount"]}");
+          print("debug: balance ${extracted["currentBalance"]}");
+          print("debug: reference ${extracted["reference"]}");
+
           // Validate required fields
           if (extracted['amount'] == null ||
               extracted['currentBalance'] == null ||
+              extracted['accountNumber'] == null ||
               extracted['reference'] == null) {
             print(
-                "Pattern '${pattern.description}' matched but missing required fields (amount, balance, or reference). Skipping.");
+                "✗ Pattern '${pattern.description}' matched but missing required fields (amount, balance, or reference). Skipping.");
             continue;
           }
 
+          print(
+              "dubg: ✓ All required fields present. Returning extracted data.");
           return extracted;
+        } else {
+          print("debug: ✗ No match for pattern: ${pattern.description}");
         }
       } catch (e) {
-        print("Error checking pattern '${pattern.description}': $e");
+        print("debug: ✗ Error checking pattern '${pattern.description}': $e");
         // Continue to next pattern
       }
     }
 
+    print("debug: \n✗ No matching pattern found for message.");
     return null; // No match found
   }
 

@@ -26,9 +26,7 @@ class AccountSummary {
   final double totalDebit;
   final double settledBalance;
   final double pendingCredit;
-  final String
-      balance; // Kept as String to match original, but should probably be double
-
+  final double balance;
   AccountSummary(
       {required this.bankId,
       required this.accountNumber,

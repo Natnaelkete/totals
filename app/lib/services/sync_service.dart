@@ -18,7 +18,7 @@ class SyncService {
           transactions.where((t) => t.status != 'SYNCED').toList();
 
       if (unsynced.isEmpty) {
-        print("No transactions to sync.");
+        print("debug: No transactions to sync.");
         return true;
       }
 
@@ -29,7 +29,7 @@ class SyncService {
       );
 
       if (response.statusCode == 201) {
-        print("Transactions synced successfully!");
+        print("debug: Transactions synced successfully!");
 
         // Update local status
         // Note: This matches original logic which updates ALL to SYNCED if they match reference
@@ -62,11 +62,11 @@ class SyncService {
 
         return true;
       } else {
-        print("Failed to sync: ${response.statusCode}");
+        print("debug: Failed to sync: ${response.statusCode}");
         return false;
       }
     } catch (e) {
-      print("Sync failed: $e");
+      print("debug: Sync failed: $e");
       return false;
     }
   }

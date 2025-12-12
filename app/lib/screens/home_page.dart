@@ -11,6 +11,7 @@ import 'package:totals/widgets/bank_detail.dart';
 import 'package:totals/widgets/add_account_form.dart';
 import 'package:totals/widgets/total_balance_card.dart';
 import 'package:totals/widgets/debug_sms_dialog.dart';
+import 'package:totals/widgets/debug_transactions_dialog.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -62,7 +63,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       Provider.of<TransactionProvider>(context, listen: false).loadData();
-      _syncService.syncTransactions();
+      // _syncService.syncTransactions();
     }
   }
 
@@ -186,6 +187,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       IconButton(
+                        icon: const Icon(Icons.list_alt,
+                            color: Color(0xFF8DA1E1), size: 25),
+                        onPressed: () => showDebugTransactionsDialog(context),
+                      ),
+                      IconButton(
                         icon: const Icon(Icons.calendar_month_outlined,
                             color: Color(0xFF8DA1E1), size: 25),
                         onPressed: () => _selectDate(context),
@@ -211,7 +217,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           body: RefreshIndicator(
               onRefresh: () async {
                 await provider.loadData();
-                await _syncService.syncTransactions();
+                // await _syncService.syncTransactions();
                 ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Page Refreshed')));
               },

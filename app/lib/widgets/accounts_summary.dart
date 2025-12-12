@@ -138,15 +138,11 @@ class _AccountsSummaryListState extends State<AccountsSummaryList> {
                                                       .contains(
                                                           account.accountNumber)
                                                   ? formatNumberWithComma(
-                                                          double.tryParse(
-                                                              account
-                                                                  .balance)) +
+                                                          account.balance) +
                                                       " ETB"
                                                   : "*" *
                                                       formatNumberWithComma(
-                                                              double.tryParse(
-                                                                  account
-                                                                      .balance))
+                                                              account.balance)
                                                           .length,
                                               style: const TextStyle(
                                                 fontSize: 14,
@@ -351,8 +347,7 @@ class _AccountsSummaryListState extends State<AccountsSummaryList> {
                                       ),
                                     ),
                                     Text(
-                                        formatNumberWithComma(double.tryParse(
-                                                account.balance)) +
+                                        formatNumberWithComma(account.balance) +
                                             " ETB",
                                         style: const TextStyle(
                                           fontWeight: FontWeight.bold,
