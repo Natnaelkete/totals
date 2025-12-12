@@ -167,6 +167,28 @@ class SmsService {
     // We need to match the Bank ID from the pattern, not just assume 1 (CBE)
     int bankId = details['bankId'] ?? bank.id;
 
+    if (bankId == 6) {
+      AccountRepository accRepo = AccountRepository();
+      List<Account> accounts = await accRepo.getAccounts();
+      int index = accounts.indexWhere((a) {
+        return a.bank == bankId;
+      });
+      Account old = accounts[index];
+      double newBalance = details['currentBalance'] != null
+          ? sanitizeAmount(details['currentBalance'])
+          : old.balance;
+
+      Account updated = Account(
+          accountNumber: old.accountNumber,
+          bank: old.bank,
+          balance: newBalance,
+          accountHolderName: old.accountHolderName,
+          settledBalance: old.settledBalance,
+          pendingCredit: old.pendingCredit);
+      await accRepo.saveAccount(updated);
+      print("debug: Account balance updated for ${old.accountHolderName}");
+    }
+
     if (details['accountNumber'] != null) {
       AccountRepository accRepo = AccountRepository();
       List<Account> accounts = await accRepo.getAccounts();

@@ -67,6 +67,10 @@ class _AccountDetailPageState extends State<AccountDetailPage> {
             return widget.accountNumber.endsWith(t.accountNumber!);
           }
         }
+
+        if (widget.bankId == 6) {
+          return t.bankId == 6;
+        }
         return t.accountNumber == widget.accountNumber;
       }).toList();
 

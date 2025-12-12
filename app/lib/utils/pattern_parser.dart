@@ -70,6 +70,9 @@ class PatternParser {
           if (match.groupNames.contains('creditor')) {
             extracted['creditor'] = match.namedGroup('creditor');
           }
+          if (match.groupNames.contains("receiver")) {
+            extracted['receiver'] = match.namedGroup('receiver');
+          }
           if (match.groupNames.contains('time')) {
             // Date parsing is complex, for now store raw string or try basic parse
             // Ideally the regex extracts ISO-like or we have a date parser helper
@@ -84,12 +87,14 @@ class PatternParser {
           print("debug: amount ${extracted["amount"]}");
           print("debug: balance ${extracted["currentBalance"]}");
           print("debug: reference ${extracted["reference"]}");
+          print("debug: receiver ${extracted["receiver"]}");
 
           // Validate required fields
-          if (extracted['amount'] == null ||
-              extracted['currentBalance'] == null ||
-              extracted['accountNumber'] == null ||
-              extracted['reference'] == null) {
+          if (pattern.bankId == 1 &&
+              (extracted['amount'] == null ||
+                  extracted['currentBalance'] == null ||
+                  extracted['accountNumber'] == null ||
+                  extracted['reference'] == null)) {
             print(
                 "✗ Pattern '${pattern.description}' matched but missing required fields (amount, balance, or reference). Skipping.");
             continue;

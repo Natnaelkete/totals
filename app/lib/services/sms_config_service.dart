@@ -56,38 +56,59 @@ class SmsConfigService {
     SmsPattern(
       bankId: 6,
       senderId: "telebirr",
-      // "transferred ETB 300.00 to..."
       regex:
-          r"transferred\s+ETB\s+(?<amount>[\d,.]+)\s+to.*?transaction\s+number\s+is\s+(?<reference>\w+).*?balance\s+is\s+ETB\s+(?<balance>[\d,.]+)",
+          r"transferred\s+ETB\s?(?<amount>[\d,.]+)\s+to\s+(?<receiver>[^(]+?)\s*\(.*?transaction\s+number\s+is\s+(?<reference>[A-Z0-9]+).*?balance\s+is\s+ETB\s?(?<balance>[\d,.]+)",
       type: "DEBIT",
-      description: "Telebirr Transfer Sent",
+      description: "Telebirr P2P Transfer",
     ),
+    // 2. Transfer to Bank Account (Debit)
     SmsPattern(
       bankId: 6,
       senderId: "telebirr",
-      // "transferred ETB 110.00 successfully... to Commercial Bank..."
       regex:
-          r"transferred\s+ETB\s+(?<amount>[\d,.]+)\s+successfully.*?transaction\s+number\s+is\s+(?<reference>\w+).*?balance\s+is\s+ETB\s+(?<balance>[\d,.]+)",
+          r"transferred\s+ETB\s?(?<amount>[\d,.]+).*?from\s+your\s+telebirr\s+account\s+(?<account>\d+)\s+to\s+(?<receiver>Commercial\s+Bank|Amhara\s+Bank|[\w\s]+)\s+account.*?transaction\s+number\s+is\s+(?<reference>[A-Z0-9]+).*?balance\s+is\s+ETB\s?(?<balance>[\d,.]+)",
       type: "DEBIT",
-      description: "Telebirr Bank Transfer",
+      description: "Telebirr to Bank Transfer",
     ),
+
+    // 3. Merchant Goods Purchase (Debit)
     SmsPattern(
       bankId: 6,
       senderId: "telebirr",
-      // "paid ETB 514.99 for goods..."
       regex:
-          r"paid\s+ETB\s+(?<amount>[\d,.]+)\s+for\s+goods.*?transaction\s+number\s+is\s+(?<reference>\w+).*?balance\s+is\s+ETB\s+(?<balance>[\d,.]+)",
+          r"paid\s+ETB\s?(?<amount>[\d,.]+)\s+for\s+goods\s+purchased\s+from\s+(?<receiver>.+?)\s+on.*?transaction\s+number\s+is\s+(?<reference>[A-Z0-9]+).*?balance\s+is\s+ETB\s?(?<balance>[\d,.]+)",
       type: "DEBIT",
-      description: "Telebirr Payment",
+      description: "Telebirr Merchant Purchase",
     ),
+
+    // 4. Bill Payment / Airline (Debit)
     SmsPattern(
       bankId: 6,
       senderId: "telebirr",
-      // "received ETB 3,000.00 from..."
       regex:
-          r"received\s+ETB\s+(?<amount>[\d,.]+)\s+from.*?transaction\s+number\s+is\s+(?<reference>\w+).*?balance\s+is\s+ETB\s+(?<balance>[\d,.]+)",
+          r"paid\s+ETB\s?(?<amount>[\d,.]+)\s+to\s+(?<receiver>.+?)\s*(?:;|,\s*Bill).*?transaction\s+number\s+is\s+(?<reference>[A-Z0-9]+).*?balance\s+is\s+ETB\s?(?<balance>[\d,.]+)",
+      type: "DEBIT",
+      description: "Telebirr Bill Payment",
+    ),
+
+    // 5. P2P Received (Credit)
+    SmsPattern(
+      bankId: 6,
+      senderId: "telebirr",
+      regex:
+          r"received\s+ETB\s?(?<amount>[\d,.]+)\s+from\s+(?<sender>.+?)\(?\d{4}.*?transaction\s+number\s+is\s+(?<reference>[A-Z0-9]+).*?balance\s+is\s+ETB\s?(?<balance>[\d,.]+)",
       type: "CREDIT",
-      description: "Telebirr Received",
+      description: "Telebirr Money Received (P2P)",
+    ),
+
+    // 6. Bank Received (Credit) - Unique Structure
+    SmsPattern(
+      bankId: 6,
+      senderId: "telebirr",
+      regex:
+          r"received\s+ETB\s?(?<amount>[\d,.]+)\s+by\s+transaction\s+number\s+(?<reference>[A-Z0-9]+).*?from\s+(?<sender>.+?)\s+to\s+your\s+telebirr\s+Account\s+(?<account>\d+).*?balance\s+is\s+ETB\s?(?<balance>[\d,.]+)",
+      type: "CREDIT",
+      description: "Telebirr Received from Bank",
     ),
   ];
 
