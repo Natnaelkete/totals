@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:another_telephony/telephony.dart';
 import 'package:totals/data/consts.dart';
 import 'package:totals/services/sms_config_service.dart';
@@ -8,6 +7,8 @@ import 'package:totals/repositories/account_repository.dart';
 import 'package:totals/models/transaction.dart';
 import 'package:totals/models/account.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:totals/models/failed_parse.dart';
+import 'package:totals/repositories/failed_parse_repository.dart';
 
 // Top-level function for background execution
 @pragma('vm:entry-point')
@@ -138,13 +139,19 @@ class SmsService {
     final patterns = await configService.getPatterns();
     final relevantPatterns =
         patterns.where((p) => p.bankId == bank.id).toList();
-
     // 2. Parse
     var details = PatternParser.extractTransactionDetails(
-        messageBody, senderAddress, relevantPatterns);
+        configService.cleanSmsText(messageBody),
+        senderAddress,
+        relevantPatterns);
 
     if (details == null) {
       print("debug: No matching pattern found for message from $senderAddress");
+      await FailedParseRepository().add(FailedParse(
+          address: senderAddress,
+          body: messageBody,
+          reason: "No matching pattern",
+          timestamp: DateTime.now().toIso8601String()));
       return;
     }
 
@@ -160,6 +167,11 @@ class SmsService {
     String? newRef = details['reference'];
     if (newRef != null && existingTx.any((t) => t.reference == newRef)) {
       print("debug: Duplicate transaction skipped");
+      await FailedParseRepository().add(FailedParse(
+          address: senderAddress,
+          body: messageBody,
+          reason: "Duplicate transaction $newRef",
+          timestamp: DateTime.now().toIso8601String()));
       return;
     }
 
@@ -226,6 +238,7 @@ class SmsService {
     // Transaction.fromJson expects Strings mostly?
     Transaction newTx = Transaction.fromJson(details);
     await txRepo.saveTransaction(newTx);
+
     print("debug: New transaction saved: ${newTx.reference}");
   }
 }

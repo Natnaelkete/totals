@@ -5,9 +5,6 @@ class PatternParser {
   /// Returns a map of extracted data if a match is found, or null otherwise.
   static Map<String, dynamic>? extractTransactionDetails(
       String messageBody, String senderAddress, List<SmsPattern> patterns) {
-    // Normalize body to single line for easier regex in some cases,
-    // or keep as is. Usually multiline regex is fine.
-    // For safety against slight formatting variations, we'll trim.
     String cleanBody = messageBody.trim();
 
     for (var pattern in patterns) {
@@ -32,7 +29,9 @@ class PatternParser {
           extracted['bankId'] = pattern.bankId; // Default bank ID from pattern
 
           if (match.groupNames.contains('amount')) {
-            extracted['amount'] = _cleanNumber(match.namedGroup('amount'));
+            print("debug: Extracted amount: ${match.namedGroup('amount')}");
+            extracted['amount'] =
+                double.tryParse(_cleanNumber(match.namedGroup('amount')) ?? "");
             print("debug: Extracted amount: ${extracted['amount']}");
           }
           if (match.groupNames.contains('balance')) {
@@ -118,6 +117,11 @@ class PatternParser {
 
   static String? _cleanNumber(String? input) {
     if (input == null) return null;
-    return input.replaceAll(',', '').trim();
+
+    String cleaned = input.replaceAll(',', '').trim();
+    cleaned = cleaned.replaceAll(RegExp(r'[^0-9.]$'), '');
+    cleaned = cleaned.replaceAll(RegExp(r'\.+$'), '');
+
+    return cleaned;
   }
 }

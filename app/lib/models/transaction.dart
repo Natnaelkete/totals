@@ -1,9 +1,6 @@
-import 'dart:convert';
-
 class Transaction {
-  final String?
-      amount; // Kept as String? to match some usage, but double is better
-  final String? reference;
+  final double amount; // required
+  final String reference; // required
   final String? creditor;
   final String? time; // ISO string
   final String? status; // PENDING, CLEARED, SYNCED
@@ -14,8 +11,8 @@ class Transaction {
   final String? accountNumber; // Last 4 digits
 
   Transaction({
-    this.amount,
-    this.reference,
+    required this.amount,
+    required this.reference,
     this.creditor,
     this.time,
     this.status,
@@ -27,9 +24,15 @@ class Transaction {
   });
 
   factory Transaction.fromJson(Map<String, dynamic> json) {
+    double toDouble(dynamic v) {
+      if (v is num) return v.toDouble();
+      if (v is String) return double.tryParse(v) ?? 0.0;
+      return 0.0;
+    }
+
     return Transaction(
-      amount: json['amount']?.toString(),
-      reference: json['reference'],
+      amount: json['amount'],
+      reference: json['reference'] ?? '',
       creditor: json['creditor'],
       time: json['time'],
       status: json['status'],
@@ -41,27 +44,16 @@ class Transaction {
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {
-      'amount': amount,
-      'reference': reference,
-      'creditor': creditor,
-      'time': time,
-      'status': status,
-      'currentBalance': currentBalance,
-      'bankId': bankId,
-      'type': type,
-      'transactionLink': transactionLink,
-      'accountNumber': accountNumber,
-    };
-  }
-
-  static String encode(List<Transaction> transactions) => json.encode(
-        transactions.map<Map<String, dynamic>>((t) => t.toJson()).toList(),
-      );
-
-  static List<Transaction> decode(String transactions) =>
-      (json.decode(transactions) as List<dynamic>)
-          .map<Transaction>((item) => Transaction.fromJson(item))
-          .toList();
+  Map<String, dynamic> toJson() => {
+        'amount': amount,
+        'reference': reference,
+        'creditor': creditor,
+        'time': time,
+        'status': status,
+        'currentBalance': currentBalance,
+        'bankId': bankId,
+        'type': type,
+        'transactionLink': transactionLink,
+        'accountNumber': accountNumber,
+      };
 }

@@ -424,7 +424,7 @@ class _AccountDetailPageState extends State<AccountDetailPage> {
                                         overflow: TextOverflow.ellipsis,
                                       )),
                                       Text(
-                                        '${transaction.type == 'CREDIT' ? "+" : "-"} ${formatNumberWithComma(double.tryParse(transaction.amount ?? "0"))} ETB',
+                                        '${transaction.type == 'CREDIT' ? "+" : "-"} ${formatNumberWithComma(transaction.amount)} ETB',
                                         style: TextStyle(
                                             fontWeight: FontWeight.w500,
                                             color: transaction.type == 'CREDIT'

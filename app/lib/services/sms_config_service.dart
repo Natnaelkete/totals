@@ -51,6 +51,13 @@ class SmsConfigService {
       type: "DEBIT",
       description: "CBE Transfer Debit",
     ),
+    SmsPattern(
+        bankId: 1,
+        senderId: "CBE",
+        regex:
+            r"(?:Account|Acct)\s+(?<account>[\d\*]+).*?has\s+been\s+debited\s+with\s+ETB\s?(?<amount>[\d,.]+).*?Current\s+Balance\s+is\s+ETB\s?(?<balance>[\d,.]+).*?(id=|BranchReceipt/)(?<reference>FT\w+)",
+        type: "DEBIT",
+        description: "CBE to own telebirr"),
 
     // --- Telebirr Patterns ---
     SmsPattern(
@@ -66,7 +73,7 @@ class SmsConfigService {
       bankId: 6,
       senderId: "telebirr",
       regex:
-          r"transferred\s+ETB\s?(?<amount>[\d,.]+).*?from\s+your\s+telebirr\s+account\s+(?<account>\d+)\s+to\s+(?<receiver>Commercial\s+Bank|Amhara\s+Bank|[\w\s]+)\s+account.*?transaction\s+number\s+is\s+(?<reference>[A-Z0-9]+).*?balance\s+is\s+ETB\s?(?<balance>[\d,.]+)",
+          r"transferred\s+ETB\s?(?<amount>[\d,.]+).*?from\s+your\s+telebirr\s+account\s+(?<account>\d+)\s+to\s+(?<receiver>.+?)\s+account\s+number\s+(?<bankAccount>\d+).*?telebirr\s+transaction\s+number\s*is\s*(?<reference>[A-Z0-9]+).*?balance\s+is\s+ETB\s?(?<balance>[\d,.]+)",
       type: "DEBIT",
       description: "Telebirr to Bank Transfer",
     ),
@@ -95,8 +102,11 @@ class SmsConfigService {
     SmsPattern(
       bankId: 6,
       senderId: "telebirr",
-      regex:
-          r"received\s+ETB\s?(?<amount>[\d,.]+)\s+from\s+(?<sender>.+?)\(?\d{4}.*?transaction\s+number\s+is\s+(?<reference>[A-Z0-9]+).*?balance\s+is\s+ETB\s?(?<balance>[\d,.]+)",
+      regex: r"received\s+ETB\s?(?<amount>[\d,.]+)"
+          r".*?\s+from\s+(?<sender>.+?)\s+on\s+"
+          r"(?<date>\d{1,2}[\/]\d{1,2}[\/]\d{4}\s+\d{1,2}:\d{2}:\d{2})"
+          r".*?transaction\s+number\s+is\s*(?<reference>[A-Z0-9]+)"
+          r".*?balance\s+is\s+ETB\s?(?<balance>[\d,.]+)",
       type: "CREDIT",
       description: "Telebirr Money Received (P2P)",
     ),
@@ -106,11 +116,24 @@ class SmsConfigService {
       bankId: 6,
       senderId: "telebirr",
       regex:
-          r"received\s+ETB\s?(?<amount>[\d,.]+)\s+by\s+transaction\s+number\s+(?<reference>[A-Z0-9]+).*?from\s+(?<sender>.+?)\s+to\s+your\s+telebirr\s+Account\s+(?<account>\d+).*?balance\s+is\s+ETB\s?(?<balance>[\d,.]+)",
+          r"received\s+ETB\s?(?<amount>[\d,.]+)\s+by\s+transaction\s+number\s*(?<reference>[A-Z0-9]+).*?from\s+.*?\s+to\s+your\s+telebirr\s+account.*?balance\s+is\s+ETB\s?(?<balance>[\d,.]+)",
       type: "CREDIT",
       description: "Telebirr Received from Bank",
     ),
   ];
+  String cleanSmsText(String text) {
+    try {
+      String jsonString = jsonEncode(text);
+      String cleaned = jsonDecode(jsonString);
+      cleaned = cleaned.replaceAll('\r', ' ');
+      cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ');
+      cleaned = cleaned.replaceAll(RegExp(r'\.\s*([A-Z])'), ' \$1');
+      return cleaned.trim();
+    } catch (e) {
+      print("debug: JSON sanitization failed: $e");
+      return text;
+    }
+  }
 
   Future<List<SmsPattern>> getPatterns() async {
     return _defaultPatterns;

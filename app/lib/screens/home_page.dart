@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:totals/providers/transaction_provider.dart';
 import 'package:totals/services/sms_service.dart';
-import 'package:totals/services/sync_service.dart';
 import 'package:totals/widgets/auth_page.dart';
 import 'package:totals/widgets/home_tabs.dart';
 import 'package:totals/widgets/banks_summary_list.dart';
@@ -12,6 +11,7 @@ import 'package:totals/widgets/add_account_form.dart';
 import 'package:totals/widgets/total_balance_card.dart';
 import 'package:totals/widgets/debug_sms_dialog.dart';
 import 'package:totals/widgets/debug_transactions_dialog.dart';
+import 'package:totals/widgets/failed_parse_dialog.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -23,7 +23,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final LocalAuthentication _auth = LocalAuthentication();
   final SmsService _smsService = SmsService();
-  final SyncService _syncService = SyncService();
+  final PageController _pageController = PageController();
 
   bool _isAuthenticated = false;
 
@@ -47,15 +47,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     // Initial Load
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<TransactionProvider>(context, listen: false).loadData();
-      _syncService.syncTransactions().then((_) {
-        Provider.of<TransactionProvider>(context, listen: false).loadData();
-      });
     });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _pageController.dispose();
     super.dispose();
   }
 
@@ -93,6 +91,25 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     setState(() {
       activeTab = tabId;
     });
+    // Find the index of the tab in the tabs list
+    final tabs = _getTabs();
+    final index = tabs.indexOf(tabId);
+    if (index != -1 && _pageController.hasClients) {
+      _pageController.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  List<int> _getTabs() {
+    final provider = Provider.of<TransactionProvider>(context, listen: false);
+    List<int> tabs = [0];
+    if (provider.bankSummaries.isNotEmpty) {
+      tabs.addAll(provider.bankSummaries.map((b) => b.bankId));
+    }
+    return tabs;
   }
 
   Future<void> _selectDate(BuildContext context) async {
@@ -202,6 +219,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         onPressed: () => showDebugSmsDialog(context),
                       ),
                       IconButton(
+                        icon: const Icon(Icons.error_outline,
+                            color: Color(0xFF8DA1E1), size: 25),
+                        onPressed: () => showFailedParseDialog(context),
+                        tooltip: "View Failed Parsings",
+                      ),
+                      IconButton(
                         icon: const Icon(Icons.lock_outline,
                             color: Color(0xFF8DA1E1), size: 25),
                         onPressed: () {
@@ -221,55 +244,76 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Page Refreshed')));
               },
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    HomeTabs(
-                        tabs: tabs,
-                        activeTab: activeTab,
-                        onChangeTab: changeTab),
-                    const SizedBox(height: 12),
-                    activeTab == 0
-                        ? SizedBox(
-                            height: MediaQuery.of(context).size.height * 0.8,
-                            child: Column(
-                              children: [
-                                TotalBalanceCard(
-                                  summary: provider.summary,
-                                  showBalance: showTotalBalance,
-                                  onToggleBalance: () {
-                                    setState(() {
-                                      showTotalBalance = !showTotalBalance;
-                                      visibleTotalBalancesForSubCards =
-                                          visibleTotalBalancesForSubCards
-                                                  .isEmpty
-                                              ? provider.bankSummaries
-                                                  .map((e) =>
-                                                      e.bankId.toString())
-                                                  .toList()
-                                              : [];
-                                    });
-                                  },
-                                ),
-                                const SizedBox(height: 12),
-                                Flexible(
-                                  child: BanksSummaryList(
-                                      banks: provider.bankSummaries,
-                                      visibleTotalBalancesForSubCards:
-                                          visibleTotalBalancesForSubCards),
-                                )
-                              ],
-                            ))
-                        : BankDetail(
-                            bankId: activeTab,
-                            accountSummaries: provider.accountSummaries
-                                .where((e) => e.bankId == activeTab)
-                                .toList(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  HomeTabs(
+                      tabs: tabs, activeTab: activeTab, onChangeTab: changeTab),
+                  Expanded(
+                    child: PageView.builder(
+                      controller: _pageController,
+                      onPageChanged: (index) {
+                        setState(() {
+                          activeTab = tabs[index];
+                        });
+                      },
+                      itemCount: tabs.length,
+                      itemBuilder: (context, index) {
+                        final tabId = tabs[index];
+                        return SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 12),
+                              tabId == 0
+                                  ? SizedBox(
+                                      height:
+                                          MediaQuery.of(context).size.height *
+                                              0.8,
+                                      child: Column(
+                                        children: [
+                                          TotalBalanceCard(
+                                            summary: provider.summary,
+                                            showBalance: showTotalBalance,
+                                            onToggleBalance: () {
+                                              setState(() {
+                                                showTotalBalance =
+                                                    !showTotalBalance;
+                                                visibleTotalBalancesForSubCards =
+                                                    visibleTotalBalancesForSubCards
+                                                            .isEmpty
+                                                        ? provider.bankSummaries
+                                                            .map((e) => e.bankId
+                                                                .toString())
+                                                            .toList()
+                                                        : [];
+                                              });
+                                            },
+                                          ),
+                                          const SizedBox(height: 12),
+                                          Flexible(
+                                            child: BanksSummaryList(
+                                                banks: provider.bankSummaries,
+                                                visibleTotalBalancesForSubCards:
+                                                    visibleTotalBalancesForSubCards),
+                                          )
+                                        ],
+                                      ))
+                                  : BankDetail(
+                                      bankId: tabId,
+                                      accountSummaries: provider
+                                          .accountSummaries
+                                          .where((e) => e.bankId == tabId)
+                                          .toList(),
+                                    ),
+                            ],
                           ),
-                  ],
-                ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               )),
         );
       },

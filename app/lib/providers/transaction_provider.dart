@@ -85,7 +85,7 @@ class TransactionProvider with ChangeNotifier {
       double totalCredit = 0.0;
 
       for (var t in bankTransactions) {
-        double amount = double.tryParse(t.amount ?? "0") ?? 0.0;
+        double amount = t.amount;
         if (t.type == "DEBIT") {
           totalDebit += amount;
         } else if (t.type == "CREDIT") {
@@ -145,7 +145,7 @@ class TransactionProvider with ChangeNotifier {
       double totalDebit = 0.0;
       double totalCredit = 0.0;
       for (var t in accountTransactions) {
-        double amount = double.tryParse(t.amount ?? "0") ?? 0.0;
+        double amount = t.amount;
         if (t.type == "DEBIT") totalDebit += amount;
         if (t.type == "CREDIT") totalCredit += amount;
       }
