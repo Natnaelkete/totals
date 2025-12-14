@@ -370,7 +370,7 @@ class _RegisterAccountFormState extends State<RegisterAccountForm> {
             ),
           ),
 
-          const Spacer(), // Push buttons to bottom if space permits
+          const SizedBox(height: 32), // Push buttons down with fixed spacing instead of Spacer
           
           // Action Buttons
           Row(
