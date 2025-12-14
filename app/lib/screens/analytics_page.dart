@@ -19,7 +19,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
   int? _selectedBankFilter; // null for 'All', or bankId
   String? _selectedAccountFilter; // null for 'All', or accountNumber
   String _sortBy = 'Date'; // 'Date', 'Amount', 'Reference'
-  String _chartType = 'Line Chart'; // 'Line Chart', 'Bar Chart', 'Pie Chart', 'P&L Calendar'
+  String _chartType = 'P&L Calendar'; // 'Line Chart', 'Bar Chart', 'Pie Chart', 'P&L Calendar'
 
   @override
   Widget build(BuildContext context) {
@@ -940,26 +940,65 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
       }).toList();
     }
     
-    // Get the current month
-    final currentMonth = DateTime(now.year, now.month, 1);
-    final firstDayOfMonth = currentMonth;
-    final lastDayOfMonth = DateTime(now.year, now.month + 1, 0);
-    final daysInMonth = lastDayOfMonth.day;
+    // Determine date range based on selected period
+    DateTime startDate;
+    DateTime endDate;
+    String periodLabel;
+    List<DateTime> dates = [];
     
-    // Calculate which day of the week the month starts on (Monday = 0)
-    final firstWeekday = (firstDayOfMonth.weekday - 1) % 7;
+    if (_selectedPeriod == 'Week') {
+      // Week view - show 7 days starting from Monday
+      int daysSinceMonday = (now.weekday - 1) % 7;
+      startDate = DateTime(now.year, now.month, now.day).subtract(Duration(days: daysSinceMonday));
+      endDate = startDate.add(const Duration(days: 6));
+      periodLabel = 'Week of ${DateFormat('MMM dd').format(startDate)}';
+      for (int i = 0; i < 7; i++) {
+        dates.add(startDate.add(Duration(days: i)));
+      }
+    } else if (_selectedPeriod == 'Month') {
+      // Month view - show current month
+      startDate = DateTime(now.year, now.month, 1);
+      endDate = DateTime(now.year, now.month + 1, 0);
+      periodLabel = DateFormat('MMMM yyyy').format(startDate);
+      final daysInMonth = endDate.day;
+      for (int day = 1; day <= daysInMonth; day++) {
+        dates.add(DateTime(now.year, now.month, day));
+      }
+    } else {
+      // Year view - show 12 months
+      startDate = DateTime(now.year, 1, 1);
+      endDate = DateTime(now.year, 12, 31);
+      periodLabel = '${now.year}';
+      for (int month = 1; month <= 12; month++) {
+        dates.add(DateTime(now.year, month, 1));
+      }
+    }
     
-    // Calculate P&L for each day of the month
+    // Calculate which day of the week the period starts on (Monday = 0)
+    final firstWeekday = (dates.first.weekday - 1) % 7;
+    
+    // Calculate P&L for each date in the period
     final dailyPnL = <DateTime, double>{};
-    for (int day = 1; day <= daysInMonth; day++) {
-      final date = DateTime(now.year, now.month, day);
+    for (final date in dates) {
       final dayTransactions = filtered.where((t) {
         if (t.time == null) return false;
         try {
           final transactionDate = DateTime.parse(t.time!);
-          return transactionDate.year == date.year &&
-                 transactionDate.month == date.month &&
-                 transactionDate.day == date.day;
+          if (_selectedPeriod == 'Week') {
+            // Match exact day
+            return transactionDate.year == date.year &&
+                   transactionDate.month == date.month &&
+                   transactionDate.day == date.day;
+          } else if (_selectedPeriod == 'Month') {
+            // Match exact day
+            return transactionDate.year == date.year &&
+                   transactionDate.month == date.month &&
+                   transactionDate.day == date.day;
+          } else {
+            // Match month for year view
+            return transactionDate.year == date.year &&
+                   transactionDate.month == date.month;
+          }
         } catch (e) {
           return false;
         }
@@ -991,9 +1030,22 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
         ? 100.0
         : dailyPnL.values.map((v) => v.abs()).reduce((a, b) => a > b ? a : b);
     
-    // Calculate weeks needed
-    final totalCells = firstWeekday + daysInMonth;
-    final weeks = (totalCells / 7).ceil();
+    // Calculate grid layout based on period
+    int weeks;
+    int itemsPerRow;
+    if (_selectedPeriod == 'Week') {
+      weeks = 1;
+      itemsPerRow = 7;
+    } else if (_selectedPeriod == 'Month') {
+      final daysInMonth = dates.length;
+      final totalCells = firstWeekday + daysInMonth;
+      weeks = (totalCells / 7).ceil();
+      itemsPerRow = 7;
+    } else {
+      // Year view - show months in a grid
+      weeks = 4; // 3 rows of 4 months
+      itemsPerRow = 4;
+    }
     
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1009,7 +1061,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                DateFormat('MMMM yyyy').format(currentMonth),
+                periodLabel,
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -1030,94 +1082,240 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
           // Calendar grid
           Column(
             children: [
-              // Day headers
-              Row(
-                children: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) {
-                  return Expanded(
-                    child: Center(
-                      child: Text(
-                        day,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+              // Headers based on period
+              if (_selectedPeriod == 'Year')
+                Row(
+                  children: ['Q1', 'Q2', 'Q3', 'Q4'].map((quarter) {
+                    return Expanded(
+                      child: Center(
+                        child: Text(
+                          quarter,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
                         ),
                       ),
-                    ),
-                  );
-                }).toList(),
-              ),
+                    );
+                  }).toList(),
+                )
+              else
+                Row(
+                  children: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) {
+                    return Expanded(
+                      child: Center(
+                        child: Text(
+                          day,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
               const SizedBox(height: 8),
-              // Calendar days
+              // Calendar grid
               ...List.generate(weeks, (weekIndex) {
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 4),
                   child: Row(
-                    children: List.generate(7, (dayIndex) {
-                      final cellIndex = weekIndex * 7 + dayIndex;
-                      final dayNumber = cellIndex - firstWeekday + 1;
+                    children: List.generate(itemsPerRow, (dayIndex) {
+                      final cellIndex = weekIndex * itemsPerRow + dayIndex;
                       
-                      if (dayNumber < 1 || dayNumber > daysInMonth) {
-                        return Expanded(child: Container());
-                      }
-                      
-                      final date = DateTime(now.year, now.month, dayNumber);
-                      final pnl = dailyPnL[date] ?? 0.0;
-                      final isToday = date.year == now.year &&
-                                     date.month == now.month &&
-                                     date.day == now.day;
-                      final intensity = maxPnL > 0 ? (pnl.abs() / maxPnL).clamp(0.0, 1.0) : 0.0;
-                      final isPositive = pnl >= 0;
-                      final bgOpacity = 0.2 + intensity * 0.6;
-                      // Use white text when background is intense (opacity > 0.5)
-                      final useWhiteText = bgOpacity > 0.5;
-                      
-                      return Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.all(2),
-                          child: Container(
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: isPositive
-                                  ? Colors.green.withOpacity(bgOpacity)
-                                  : Theme.of(context).colorScheme.error.withOpacity(bgOpacity),
-                              borderRadius: BorderRadius.circular(8),
-                              border: isToday
-                                  ? Border.all(
-                                      color: Theme.of(context).colorScheme.primary,
-                                      width: 2,
-                                    )
-                                  : null,
-                            ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  '$dayNumber',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: isToday ? FontWeight.bold : FontWeight.w500,
-                                    color: useWhiteText
-                                        ? Colors.white
-                                        : Theme.of(context).colorScheme.onSurface,
-                                  ),
-                                ),
-                                if (pnl != 0)
+                      if (_selectedPeriod == 'Year') {
+                        // Year view - show months
+                        if (cellIndex >= dates.length) {
+                          return Expanded(child: Container());
+                        }
+                        final date = dates[cellIndex];
+                        final monthName = DateFormat('MMM').format(date);
+                        final pnl = dailyPnL[date] ?? 0.0;
+                        final isCurrentMonth = date.year == now.year && date.month == now.month;
+                        final intensity = maxPnL > 0 ? (pnl.abs() / maxPnL).clamp(0.0, 1.0) : 0.0;
+                        final isPositive = pnl >= 0;
+                        final bgOpacity = 0.2 + intensity * 0.6;
+                        final useWhiteText = bgOpacity > 0.5;
+                        
+                        return Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.all(2),
+                            child: Container(
+                              height: 50,
+                              decoration: BoxDecoration(
+                                color: isPositive
+                                    ? Colors.green.withOpacity(bgOpacity)
+                                    : Theme.of(context).colorScheme.error.withOpacity(bgOpacity),
+                                borderRadius: BorderRadius.circular(8),
+                                border: isCurrentMonth
+                                    ? Border.all(
+                                        color: Theme.of(context).colorScheme.primary,
+                                        width: 2,
+                                      )
+                                    : null,
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
                                   Text(
-                                    '${pnl > 0 ? '+' : ''}${(pnl / 1000).toStringAsFixed(1)}k',
+                                    monthName,
                                     style: TextStyle(
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w600,
+                                      fontSize: 12,
+                                      fontWeight: isCurrentMonth ? FontWeight.bold : FontWeight.w500,
                                       color: useWhiteText
                                           ? Colors.white
-                                          : (isPositive ? Colors.green.shade700 : Theme.of(context).colorScheme.error),
+                                          : Theme.of(context).colorScheme.onSurface,
                                     ),
                                   ),
-                              ],
+                                  if (pnl != 0)
+                                    Text(
+                                      '${pnl > 0 ? '+' : ''}${(pnl / 1000).toStringAsFixed(1)}k',
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w600,
+                                        color: useWhiteText
+                                            ? Colors.white
+                                            : (isPositive ? Colors.green.shade700 : Theme.of(context).colorScheme.error),
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                      );
+                        );
+                      } else {
+                        // Week or Month view
+                        final cellIndexWithOffset = weekIndex * itemsPerRow + dayIndex;
+                        final dayNumber = cellIndexWithOffset - firstWeekday + 1;
+                        
+                        if (_selectedPeriod == 'Week') {
+                          if (cellIndexWithOffset >= dates.length) {
+                            return Expanded(child: Container());
+                          }
+                          final date = dates[cellIndexWithOffset];
+                          final dayNumber = date.day;
+                          final pnl = dailyPnL[date] ?? 0.0;
+                          final isToday = date.year == now.year &&
+                                         date.month == now.month &&
+                                         date.day == now.day;
+                          final intensity = maxPnL > 0 ? (pnl.abs() / maxPnL).clamp(0.0, 1.0) : 0.0;
+                          final isPositive = pnl >= 0;
+                          final bgOpacity = 0.2 + intensity * 0.6;
+                          final useWhiteText = bgOpacity > 0.5;
+                          
+                          return Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.all(2),
+                              child: Container(
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: isPositive
+                                      ? Colors.green.withOpacity(bgOpacity)
+                                      : Theme.of(context).colorScheme.error.withOpacity(bgOpacity),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: isToday
+                                      ? Border.all(
+                                          color: Theme.of(context).colorScheme.primary,
+                                          width: 2,
+                                        )
+                                      : null,
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      '$dayNumber',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: isToday ? FontWeight.bold : FontWeight.w500,
+                                        color: useWhiteText
+                                            ? Colors.white
+                                            : Theme.of(context).colorScheme.onSurface,
+                                      ),
+                                    ),
+                                    if (pnl != 0)
+                                      Text(
+                                        '${pnl > 0 ? '+' : ''}${(pnl / 1000).toStringAsFixed(1)}k',
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w600,
+                                          color: useWhiteText
+                                              ? Colors.white
+                                              : (isPositive ? Colors.green.shade700 : Theme.of(context).colorScheme.error),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        } else {
+                          // Month view
+                          if (dayNumber < 1 || dayNumber > dates.length) {
+                            return Expanded(child: Container());
+                          }
+                          
+                          final date = dates[dayNumber - 1];
+                          final pnl = dailyPnL[date] ?? 0.0;
+                          final isToday = date.year == now.year &&
+                                         date.month == now.month &&
+                                         date.day == now.day;
+                          final intensity = maxPnL > 0 ? (pnl.abs() / maxPnL).clamp(0.0, 1.0) : 0.0;
+                          final isPositive = pnl >= 0;
+                          final bgOpacity = 0.2 + intensity * 0.6;
+                          final useWhiteText = bgOpacity > 0.5;
+                          
+                          return Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.all(2),
+                              child: Container(
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: isPositive
+                                      ? Colors.green.withOpacity(bgOpacity)
+                                      : Theme.of(context).colorScheme.error.withOpacity(bgOpacity),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: isToday
+                                      ? Border.all(
+                                          color: Theme.of(context).colorScheme.primary,
+                                          width: 2,
+                                        )
+                                      : null,
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      '$dayNumber',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: isToday ? FontWeight.bold : FontWeight.w500,
+                                        color: useWhiteText
+                                            ? Colors.white
+                                            : Theme.of(context).colorScheme.onSurface,
+                                      ),
+                                    ),
+                                    if (pnl != 0)
+                                      Text(
+                                        '${pnl > 0 ? '+' : ''}${(pnl / 1000).toStringAsFixed(1)}k',
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w600,
+                                          color: useWhiteText
+                                              ? Colors.white
+                                              : (isPositive ? Colors.green.shade700 : Theme.of(context).colorScheme.error),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        }
+                      }
                     }),
                   ),
                 );
