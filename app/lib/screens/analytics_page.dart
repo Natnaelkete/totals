@@ -28,6 +28,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
   bool _leftButtonPressed = false;
   bool _rightButtonPressed = false;
   double _dragOffset = 0.0;
+  Widget? _previousChartWidget;
 
   @override
   void initState() {
@@ -75,7 +76,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
       _dragOffset = 0.0; // Reset drag offset
     });
 
-    // Set animation direction
+    // Set animation direction for slide out
     _slideAnimation = Tween<Offset>(
       begin: Offset.zero,
       end: Offset(forward ? -1.0 : 1.0, 0),
@@ -87,7 +88,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
     // Start slide out animation
     await _slideAnimationController.forward();
 
-    // Update the offset
+    // Update the offset (this will trigger rebuild with new data)
     setState(() {
       if (forward) {
         _timeFrameOffset++;
@@ -95,6 +96,9 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
         _timeFrameOffset--;
       }
     });
+
+    // Wait a frame for the new chart to be built
+    await Future.delayed(const Duration(milliseconds: 16));
 
     // Reset animation for slide in
     _slideAnimation = Tween<Offset>(
@@ -112,6 +116,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
     setState(() {
       _isNavigating = false;
       _dragOffset = 0.0; // Ensure drag offset is reset
+      _previousChartWidget = null; // Clear cached chart after transition
     });
   }
 
@@ -819,6 +824,10 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
           onHorizontalDragStart: (details) {
             if (_isNavigating) return;
             _dragOffset = 0.0;
+            // Cache current chart before dragging
+            if (_previousChartWidget == null) {
+              _previousChartWidget = chartWidget;
+            }
             setState(() {});
           },
           onHorizontalDragUpdate: (details) {
@@ -856,7 +865,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
             child: SlideTransition(
               position: _dragOffset != 0.0
                   ? AlwaysStoppedAnimation(Offset(_dragOffset, 0))
-                  : _slideAnimation,
+                  : (_isNavigating ? _slideAnimation : AlwaysStoppedAnimation(Offset.zero)),
               child: chartWidget,
             ),
           ),
@@ -1392,9 +1401,9 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
       weeks = (totalCells / 7).ceil();
       itemsPerRow = 7;
     } else {
-      // Year view - show months in a grid
-      weeks = 4; // 3 rows of 4 months
-      itemsPerRow = 4;
+      // Year view - show months organized by quarters (4 columns = quarters, 3 rows = months per quarter)
+      weeks = 3; // 3 rows (months per quarter)
+      itemsPerRow = 4; // 4 columns (quarters)
     }
     
     return Container(
@@ -1474,10 +1483,12 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
                   padding: const EdgeInsets.only(bottom: 4),
                   child: Row(
                     children: List.generate(itemsPerRow, (dayIndex) {
-                      final cellIndex = weekIndex * itemsPerRow + dayIndex;
+                      final cellIndex = _selectedPeriod == 'Year'
+                          ? dayIndex * weeks + weekIndex // For year view: column (quarter) * 3 + row (month in quarter)
+                          : weekIndex * itemsPerRow + dayIndex; // For week/month: row * columns + column
                       
                       if (_selectedPeriod == 'Year') {
-                        // Year view - show months
+                        // Year view - show months organized by quarters
                         if (cellIndex >= dates.length) {
                           return Expanded(child: Container());
                         }
@@ -1487,7 +1498,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
                         final isCurrentMonth = _timeFrameOffset == 0 && date.year == DateTime.now().year && date.month == DateTime.now().month;
                         final intensity = maxPnL > 0 ? (pnl.abs() / maxPnL).clamp(0.0, 1.0) : 0.0;
                         final isPositive = pnl >= 0;
-                        final bgOpacity = 0.2 + intensity * 0.6;
+                        final hasTransactions = pnl != 0.0;
+                        final bgOpacity = hasTransactions ? (0.2 + intensity * 0.6) : 0.1;
                         final useWhiteText = bgOpacity > 0.5;
                         
                         return Expanded(
@@ -1496,9 +1508,11 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
                             child: Container(
                               height: 50,
                               decoration: BoxDecoration(
-                                color: isPositive
-                                    ? Colors.green.withOpacity(bgOpacity)
-                                    : Theme.of(context).colorScheme.error.withOpacity(bgOpacity),
+                                color: !hasTransactions
+                                    ? Colors.grey.withOpacity(0.2)
+                                    : (isPositive
+                                        ? Colors.green.withOpacity(bgOpacity)
+                                        : Theme.of(context).colorScheme.error.withOpacity(bgOpacity)),
                                 borderRadius: BorderRadius.circular(8),
                                 border: isCurrentMonth
                                     ? Border.all(
@@ -1554,7 +1568,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
                                          date.day == DateTime.now().day;
                           final intensity = maxPnL > 0 ? (pnl.abs() / maxPnL).clamp(0.0, 1.0) : 0.0;
                           final isPositive = pnl >= 0;
-                          final bgOpacity = 0.2 + intensity * 0.6;
+                          final hasTransactions = pnl != 0.0;
+                          final bgOpacity = hasTransactions ? (0.2 + intensity * 0.6) : 0.1;
                           final useWhiteText = bgOpacity > 0.5;
                           
                           return Expanded(
@@ -1563,9 +1578,11 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
                               child: Container(
                                 height: 40,
                                 decoration: BoxDecoration(
-                                  color: isPositive
-                                      ? Colors.green.withOpacity(bgOpacity)
-                                      : Theme.of(context).colorScheme.error.withOpacity(bgOpacity),
+                                  color: !hasTransactions
+                                      ? Colors.grey.withOpacity(0.2)
+                                      : (isPositive
+                                          ? Colors.green.withOpacity(bgOpacity)
+                                          : Theme.of(context).colorScheme.error.withOpacity(bgOpacity)),
                                   borderRadius: BorderRadius.circular(8),
                                   border: isToday
                                       ? Border.all(
@@ -1617,7 +1634,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
                                          date.day == DateTime.now().day;
                           final intensity = maxPnL > 0 ? (pnl.abs() / maxPnL).clamp(0.0, 1.0) : 0.0;
                           final isPositive = pnl >= 0;
-                          final bgOpacity = 0.2 + intensity * 0.6;
+                          final hasTransactions = pnl != 0.0;
+                          final bgOpacity = hasTransactions ? (0.2 + intensity * 0.6) : 0.1;
                           final useWhiteText = bgOpacity > 0.5;
                           
                           return Expanded(
@@ -1626,9 +1644,11 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
                               child: Container(
                                 height: 40,
                                 decoration: BoxDecoration(
-                                  color: isPositive
-                                      ? Colors.green.withOpacity(bgOpacity)
-                                      : Theme.of(context).colorScheme.error.withOpacity(bgOpacity),
+                                  color: !hasTransactions
+                                      ? Colors.grey.withOpacity(0.2)
+                                      : (isPositive
+                                          ? Colors.green.withOpacity(bgOpacity)
+                                          : Theme.of(context).colorScheme.error.withOpacity(bgOpacity)),
                                   borderRadius: BorderRadius.circular(8),
                                   border: isToday
                                       ? Border.all(
