@@ -18,6 +18,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
   String _selectedPeriod = 'Week'; // 'Week', 'Month', 'Year'
   int? _selectedBankFilter; // null for 'All', or bankId
   String _sortBy = 'Date'; // 'Date', 'Amount', 'Reference'
+  String _chartType = 'Line Chart'; // 'Line Chart', 'Bar Chart', 'Pie Chart', 'Heatmap'
 
   @override
   Widget build(BuildContext context) {
@@ -116,6 +117,15 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                     // Income/Expense Cards
                     _buildIncomeExpenseCards(income, expenses),
                     const SizedBox(height: 24),
+
+                    // Chart Type Selector
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        _buildChartTypeDropdown(),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
 
                     // Chart
                     _buildChart(chartData, maxValue),
@@ -269,8 +279,20 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          colors: [
+            Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+            Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.15),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -280,22 +302,40 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
             onTap: () {
               setState(() => _selectedPeriod = period);
             },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeInOut,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               decoration: BoxDecoration(
-                color: isSelected
-                    ? Theme.of(context).colorScheme.primary
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
+                gradient: isSelected
+                    ? LinearGradient(
+                        colors: [
+                          Theme.of(context).colorScheme.primary,
+                          Theme.of(context).colorScheme.primary.withOpacity(0.8),
+                        ],
+                      )
+                    : null,
+                color: isSelected ? null : Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: isSelected
+                    ? [
+                        BoxShadow(
+                          color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ]
+                    : null,
               ),
               child: Text(
                 period,
                 style: TextStyle(
                   fontSize: 14,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                   color: isSelected
                       ? Colors.white
                       : Theme.of(context).colorScheme.onSurfaceVariant,
+                  letterSpacing: 0.5,
                 ),
               ),
             ),
@@ -303,6 +343,108 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
         }).toList(),
       ),
     );
+  }
+
+  Widget _buildChartTypeDropdown() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.2),
+        ),
+      ),
+      child: PopupMenuButton<String>(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              _getChartTypeIcon(_chartType),
+              size: 18,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              _chartType,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              Icons.keyboard_arrow_down,
+              size: 20,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ],
+        ),
+        onSelected: (value) {
+          setState(() {
+            _chartType = value;
+          });
+        },
+        itemBuilder: (context) => [
+          PopupMenuItem(
+            value: 'Line Chart',
+            child: Row(
+              children: [
+                Icon(Icons.show_chart, size: 18),
+                const SizedBox(width: 12),
+                const Text('Line Chart'),
+              ],
+            ),
+          ),
+          PopupMenuItem(
+            value: 'Bar Chart',
+            child: Row(
+              children: [
+                Icon(Icons.bar_chart, size: 18),
+                const SizedBox(width: 12),
+                const Text('Bar Chart'),
+              ],
+            ),
+          ),
+          PopupMenuItem(
+            value: 'Pie Chart',
+            child: Row(
+              children: [
+                Icon(Icons.pie_chart, size: 18),
+                const SizedBox(width: 12),
+                const Text('Pie Chart'),
+              ],
+            ),
+          ),
+          PopupMenuItem(
+            value: 'Heatmap',
+            child: Row(
+              children: [
+                Icon(Icons.grid_view, size: 18),
+                const SizedBox(width: 12),
+                const Text('Heatmap'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _getChartTypeIcon(String chartType) {
+    switch (chartType) {
+      case 'Line Chart':
+        return Icons.show_chart;
+      case 'Bar Chart':
+        return Icons.bar_chart;
+      case 'Pie Chart':
+        return Icons.pie_chart;
+      case 'Heatmap':
+        return Icons.grid_view;
+      default:
+        return Icons.show_chart;
+    }
   }
 
   Widget _buildChart(List<ChartDataPoint> data, double maxValue) {
@@ -324,6 +466,20 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
       );
     }
 
+    switch (_chartType) {
+      case 'Bar Chart':
+        return _buildBarChart(data, maxValue);
+      case 'Pie Chart':
+        return _buildPieChart(data);
+      case 'Heatmap':
+        return _buildHeatmap(data);
+      case 'Line Chart':
+      default:
+        return _buildLineChart(data, maxValue);
+    }
+  }
+
+  Widget _buildLineChart(List<ChartDataPoint> data, double maxValue) {
     // Find the highest point and current day
     int highestIndex = 0;
     double highestValue = 0;
@@ -476,6 +632,214 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
             ),
           ),
       ],
+    );
+  }
+
+  Widget _buildBarChart(List<ChartDataPoint> data, double maxValue) {
+    int currentDayIndex = _getCurrentDayIndex(data);
+    
+    return Container(
+      height: 280,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      decoration: BoxDecoration(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: BarChart(
+        BarChartData(
+          gridData: FlGridData(
+            show: true,
+            drawVerticalLine: false,
+            horizontalInterval: (maxValue / 5).clamp(100.0, double.infinity),
+            getDrawingHorizontalLine: (value) {
+              return FlLine(
+                color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.08),
+                strokeWidth: 1,
+              );
+            },
+          ),
+          titlesData: FlTitlesData(
+            show: true,
+            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                getTitlesWidget: (value, meta) {
+                  final index = value.toInt();
+                  if (index >= 0 && index < data.length) {
+                    final isCurrentDay = index == currentDayIndex;
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isCurrentDay
+                              ? Theme.of(context).colorScheme.primary.withOpacity(0.25)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          data[index].label,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: isCurrentDay ? FontWeight.bold : FontWeight.w500,
+                            color: isCurrentDay
+                                ? Theme.of(context).colorScheme.primary
+                                : Theme.of(context).colorScheme.onSurface,
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+                  return const Text('');
+                },
+                reservedSize: 40,
+              ),
+            ),
+            leftTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                interval: (maxValue / 5).clamp(100.0, double.infinity),
+                reservedSize: 45,
+                getTitlesWidget: (value, meta) {
+                  if (value == 0) {
+                    return const SizedBox.shrink();
+                  }
+                  return Text(
+                    '${(value / 1000).toStringAsFixed(0)}k',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.6),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          borderData: FlBorderData(show: false),
+          barGroups: data.asMap().entries.map((entry) {
+            final index = entry.key;
+            final point = entry.value;
+            final isCurrentDay = index == currentDayIndex;
+            return BarChartGroupData(
+              x: index,
+              barRods: [
+                BarChartRodData(
+                  toY: point.value,
+                  color: isCurrentDay
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).colorScheme.primary.withOpacity(0.6),
+                  width: 16,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                ),
+              ],
+            );
+          }).toList(),
+          minY: 0,
+          maxY: maxValue,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPieChart(List<ChartDataPoint> data) {
+    final total = data.fold(0.0, (sum, point) => sum + point.value);
+    if (total == 0) {
+      return Container(
+        height: 280,
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Center(
+          child: Text(
+            'No data available',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      height: 280,
+      padding: const EdgeInsets.all(20),
+      child: PieChart(
+        PieChartData(
+          sectionsSpace: 2,
+          centerSpaceRadius: 60,
+          sections: data.map((point) {
+            final percentage = (point.value / total) * 100;
+            return PieChartSectionData(
+              value: point.value,
+              title: '${percentage.toStringAsFixed(1)}%',
+              color: Theme.of(context).colorScheme.primary.withOpacity(
+                0.3 + (data.indexOf(point) % 3) * 0.2,
+              ),
+              radius: 80,
+              titleStyle: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeatmap(List<ChartDataPoint> data) {
+    final maxValue = data.isEmpty
+        ? 100.0
+        : data.map((e) => e.value).reduce((a, b) => a > b ? a : b);
+    
+    return Container(
+      height: 280,
+      padding: const EdgeInsets.all(16),
+      child: GridView.builder(
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: data.length > 7 ? 7 : data.length,
+          mainAxisSpacing: 4,
+          crossAxisSpacing: 4,
+        ),
+        itemCount: data.length,
+        itemBuilder: (context, index) {
+          final point = data[index];
+          final intensity = (point.value / maxValue).clamp(0.0, 1.0);
+          final isCurrentDay = index == _getCurrentDayIndex(data);
+          
+          return Container(
+            decoration: BoxDecoration(
+              color: isCurrentDay
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.primary.withOpacity(0.2 + intensity * 0.6),
+              borderRadius: BorderRadius.circular(8),
+              border: isCurrentDay
+                  ? Border.all(
+                      color: Colors.white,
+                      width: 2,
+                    )
+                  : null,
+            ),
+            child: Center(
+              child: Text(
+                point.label,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: isCurrentDay ? FontWeight.bold : FontWeight.w500,
+                  color: isCurrentDay
+                      ? Colors.white
+                      : Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 
