@@ -251,7 +251,7 @@ class _WebPageState extends State<WebPage> {
 
                 // Status text
                 Text(
-                  isRunning ? 'Server is Running!' : 'Server is Stopped',
+                  isRunning ? 'Server Running!' : 'Server Stopped',
                   style: theme.textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: isRunning ? runningColor : onSurfaceColor,
@@ -919,24 +919,38 @@ class _WebPageState extends State<WebPage> {
 
           // IP Address
           if (_networkIp != null)
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.wifi,
-                  color: Colors.white.withOpacity(0.4),
-                  size: 14,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  _networkIp!,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.5),
-                    fontSize: 12,
-                    fontFamily: 'monospace',
+            GestureDetector(
+              onTap: () {
+                final textToCopy =
+                    _serverService.isRunning ? '$_networkIp:8080' : _networkIp!;
+                Clipboard.setData(ClipboardData(text: textToCopy));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Copied $textToCopy to clipboard'),
+                    behavior: SnackBarBehavior.floating,
+                    duration: const Duration(seconds: 2),
                   ),
-                ),
-              ],
+                );
+              },
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.wifi,
+                    color: Colors.white.withOpacity(0.4),
+                    size: 14,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    _serverService.isRunning ? '$_networkIp:8080' : _networkIp!,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.5),
+                      fontSize: 12,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ],
+              ),
             ),
 
           // URL in the middle (tappable to copy)
