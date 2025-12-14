@@ -588,39 +588,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                               ),
                             ),
                             const SizedBox(width: 4),
-                            // Theme switcher - icon only
-                            Consumer<ThemeProvider>(
-                              builder: (context, themeProvider, child) {
-                                return Container(
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .surfaceVariant
-                                        .withOpacity(0.5),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: IconButton(
-                                    icon: Icon(
-                                      themeProvider.themeMode == ThemeMode.dark
-                                          ? Icons.light_mode_rounded
-                                          : Icons.dark_mode_rounded,
-                                      color: Theme.of(context).iconTheme.color,
-                                      size: 22,
-                                    ),
-                                    onPressed: () {
-                                      themeProvider.toggleTheme();
-                                    },
-                                    tooltip: themeProvider.themeMode ==
-                                            ThemeMode.dark
-                                        ? "Switch to Light Mode"
-                                        : "Switch to Dark Mode",
-                                    padding: const EdgeInsets.all(8),
-                                    constraints: const BoxConstraints(),
-                                  ),
-                                );
-                              },
-                            ),
-                            const SizedBox(width: 4),
                             // Lock button
                             Container(
                               decoration: BoxDecoration(
