@@ -99,7 +99,23 @@ class DatabaseHelper {
         senderId TEXT NOT NULL,
         regex TEXT NOT NULL,
         type TEXT NOT NULL,
-        description TEXT
+        description TEXT,
+        refRequired INTEGER,
+        hasAccount INTEGER
+      )
+    ''');
+
+    // Banks table
+    await db.execute('''
+      CREATE TABLE banks (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        shortName TEXT NOT NULL,
+        codes TEXT NOT NULL,
+        image TEXT NOT NULL,
+        maskPattern INTEGER,
+        uniformMasking INTEGER,
+        simBased INTEGER
       )
     ''');
 
@@ -132,8 +148,8 @@ class DatabaseHelper {
         'CREATE INDEX idx_transactions_reference ON transactions(reference)');
     await db.execute(
         'CREATE INDEX idx_transactions_bankId ON transactions(bankId)');
-    await db.execute(
-        'CREATE INDEX idx_transactions_time ON transactions(time)');
+    await db
+        .execute('CREATE INDEX idx_transactions_time ON transactions(time)');
     await db.execute(
         'CREATE INDEX idx_transactions_categoryId ON transactions(categoryId)');
     await db.execute(
@@ -193,7 +209,7 @@ class DatabaseHelper {
         await db.execute('ALTER TABLE transactions ADD COLUMN month INTEGER');
         await db.execute('ALTER TABLE transactions ADD COLUMN day INTEGER');
         await db.execute('ALTER TABLE transactions ADD COLUMN week INTEGER');
-        
+
         // Create indexes for date queries
         await db.execute(
             'CREATE INDEX IF NOT EXISTS idx_transactions_time ON transactions(time)');
@@ -203,13 +219,14 @@ class DatabaseHelper {
             'CREATE INDEX IF NOT EXISTS idx_transactions_year_month_day ON transactions(year, month, day)');
         await db.execute(
             'CREATE INDEX IF NOT EXISTS idx_transactions_bank_year_month ON transactions(bankId, year, month)');
-        
+
         print("debug: Added date columns and indexes to transactions table");
-        
+
         // Populate date columns for existing transactions
-        final transactions = await db.query('transactions', columns: ['id', 'time']);
+        final transactions =
+            await db.query('transactions', columns: ['id', 'time']);
         final batch = db.batch();
-        
+
         for (var tx in transactions) {
           if (tx['time'] != null) {
             try {
@@ -226,11 +243,12 @@ class DatabaseHelper {
                 whereArgs: [tx['id']],
               );
             } catch (e) {
-              print("debug: Error parsing date for transaction ${tx['id']}: $e");
+              print(
+                  "debug: Error parsing date for transaction ${tx['id']}: $e");
             }
           }
         }
-        
+
         await batch.commit(noResult: true);
         print("debug: Populated date columns for existing transactions");
       } catch (e) {
@@ -239,6 +257,7 @@ class DatabaseHelper {
     }
 
     if (oldVersion < 5) {
+      // Categories table (from HEAD/categories branch)
       await db.execute('''
         CREATE TABLE IF NOT EXISTS categories (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -252,28 +271,51 @@ class DatabaseHelper {
       ''');
 
       try {
-        await db.execute(
-            'ALTER TABLE transactions ADD COLUMN categoryId INTEGER');
+        await db
+            .execute('ALTER TABLE transactions ADD COLUMN categoryId INTEGER');
       } catch (e) {
-        print("debug: Error adding categoryId column (might already exist): $e");
+        print(
+            "debug: Error adding categoryId column (might already exist): $e");
       }
 
       await db.execute(
           'CREATE INDEX IF NOT EXISTS idx_transactions_categoryId ON transactions(categoryId)');
 
       await _seedBuiltInCategories(db);
+
+      // sms_patterns refRequired column (from dynamic branch)
+      try {
+        await db
+            .execute('ALTER TABLE sms_patterns ADD COLUMN refRequired INTEGER');
+        print("debug: Added refRequired column to sms_patterns table");
+      } catch (e) {
+        print(
+            "debug: Error adding refRequired column (might already exist): $e");
+      }
     }
 
     if (oldVersion < 6) {
+      // Categories iconKey (from HEAD/categories branch)
       try {
         await db.execute('ALTER TABLE categories ADD COLUMN iconKey TEXT');
       } catch (e) {
         print("debug: Error adding iconKey column (might already exist): $e");
       }
       await _seedBuiltInCategories(db);
+
+      // sms_patterns hasAccount column (from dynamic branch)
+      try {
+        await db
+            .execute('ALTER TABLE sms_patterns ADD COLUMN hasAccount INTEGER');
+        print("debug: Added hasAccount column to sms_patterns table");
+      } catch (e) {
+        print(
+            "debug: Error adding hasAccount column (might already exist): $e");
+      }
     }
 
     if (oldVersion < 7) {
+      // Categories description (from HEAD/categories branch)
       try {
         await db.execute('ALTER TABLE categories ADD COLUMN description TEXT');
       } catch (e) {
@@ -281,6 +323,25 @@ class DatabaseHelper {
             "debug: Error adding description column (might already exist): $e");
       }
       await _seedBuiltInCategories(db);
+
+      // Banks table (from dynamic branch)
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS banks (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            shortName TEXT NOT NULL,
+            codes TEXT NOT NULL,
+            image TEXT NOT NULL,
+            maskPattern INTEGER,
+            uniformMasking INTEGER,
+            simBased INTEGER
+          )
+        ''');
+        print("debug: Added banks table");
+      } catch (e) {
+        print("debug: Error adding banks table (might already exist): $e");
+      }
     }
 
     if (oldVersion < 8) {
@@ -363,8 +424,7 @@ class DatabaseHelper {
         {
           'iconKey': category.iconKey,
         },
-        where:
-            "builtInKey = ? AND (iconKey IS NULL OR iconKey = '')",
+        where: "builtInKey = ? AND (iconKey IS NULL OR iconKey = '')",
         whereArgs: [category.builtInKey],
       );
       batch.update(
@@ -372,8 +432,7 @@ class DatabaseHelper {
         {
           'description': category.description,
         },
-        where:
-            "builtInKey = ? AND (description IS NULL OR description = '')",
+        where: "builtInKey = ? AND (description IS NULL OR description = '')",
         whereArgs: [category.builtInKey],
       );
       batch.update(
@@ -474,8 +533,7 @@ class DatabaseHelper {
       await addColumn('ALTER TABLE categories ADD COLUMN flow TEXT');
     }
     if (!names.contains('recurring')) {
-      await addColumn(
-          'ALTER TABLE categories ADD COLUMN recurring INTEGER');
+      await addColumn('ALTER TABLE categories ADD COLUMN recurring INTEGER');
     }
     if (!names.contains('builtIn')) {
       await addColumn(
@@ -582,12 +640,13 @@ class DatabaseHelper {
       final desc = (r['description'] as String?)?.trim();
       final flow = (r['flow'] as String?)?.trim().toLowerCase();
 
-      final looksBuiltIn = (iconKey == null || iconKey.isEmpty || iconKey == 'gift') &&
-          (flow == null || flow.isEmpty || flow == 'expense') &&
-          (desc == null ||
-              desc.isEmpty ||
-              desc == 'Gifts and donations' ||
-              desc == 'Gifts received or given');
+      final looksBuiltIn =
+          (iconKey == null || iconKey.isEmpty || iconKey == 'gift') &&
+              (flow == null || flow.isEmpty || flow == 'expense') &&
+              (desc == null ||
+                  desc.isEmpty ||
+                  desc == 'Gifts and donations' ||
+                  desc == 'Gifts received or given');
 
       if (looksBuiltIn) {
         await db.update(
