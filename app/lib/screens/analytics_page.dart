@@ -150,23 +150,22 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
   }
 
   bool _matchesSelectedAccount(Transaction transaction, AccountSummary account) {
-    if (account.bankId == 1 &&
-        transaction.accountNumber != null &&
-        account.accountNumber.length >= 4) {
-      return transaction.accountNumber!
-              .substring(transaction.accountNumber!.length - 4) ==
+    final txnAccount = transaction.accountNumber;
+    if (txnAccount == null || txnAccount.isEmpty) {
+      return transaction.bankId == account.bankId;
+    }
+
+    if (account.bankId == 1 && account.accountNumber.length >= 4) {
+      if (txnAccount.length < 4) return transaction.bankId == account.bankId;
+      return txnAccount.substring(txnAccount.length - 4) ==
           account.accountNumber.substring(account.accountNumber.length - 4);
-    } else if (account.bankId == 4 &&
-        transaction.accountNumber != null &&
-        account.accountNumber.length >= 3) {
-      return transaction.accountNumber!
-              .substring(transaction.accountNumber!.length - 3) ==
+    } else if (account.bankId == 4 && account.accountNumber.length >= 3) {
+      if (txnAccount.length < 3) return transaction.bankId == account.bankId;
+      return txnAccount.substring(txnAccount.length - 3) ==
           account.accountNumber.substring(account.accountNumber.length - 3);
-    } else if (account.bankId == 3 &&
-        transaction.accountNumber != null &&
-        account.accountNumber.length >= 2) {
-      return transaction.accountNumber!
-              .substring(transaction.accountNumber!.length - 2) ==
+    } else if (account.bankId == 3 && account.accountNumber.length >= 2) {
+      if (txnAccount.length < 2) return transaction.bankId == account.bankId;
+      return txnAccount.substring(txnAccount.length - 2) ==
           account.accountNumber.substring(account.accountNumber.length - 2);
     } else {
       return transaction.bankId == account.bankId;

@@ -124,7 +124,8 @@ class PnLCalendarChart extends StatelessWidget {
         addPnL(dayKey, transaction);
       } else {
         if (transactionDate.year != now.year) continue;
-        final monthKey = DateTime(transactionDate.year, transactionDate.month, 1);
+        final monthKey =
+            DateTime(transactionDate.year, transactionDate.month, 1);
         addPnL(monthKey, transaction);
       }
     }
@@ -521,4 +522,3 @@ class PnLCalendarChart extends StatelessWidget {
     );
   }
 }
-
