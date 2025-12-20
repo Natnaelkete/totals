@@ -263,12 +263,16 @@ class _SettingsPageState extends State<SettingsPage>
     return profileName[0].toUpperCase();
   }
 
-  void _navigateToManageProfiles() {
-    Navigator.of(context).push(
+  Future<void> _navigateToManageProfiles() async {
+    final result = await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => const ProfileManagementPage(),
       ),
     );
+    // Refresh if profile was changed
+    if (result == true && mounted) {
+      setState(() {});
+    }
   }
 
   void _showAboutDialog() {
@@ -428,7 +432,7 @@ class _SettingsPageState extends State<SettingsPage>
           SliverPadding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             sliver: FutureBuilder(
-              future: _profileRepo.getDefaultProfile(),
+              future: _profileRepo.getActiveProfile(),
               builder: (context, snapshot) {
                 final profileName = snapshot.data?.name ?? 'Personal';
                 final profileInitials = _getProfileInitials(profileName);
@@ -577,73 +581,68 @@ class _SettingsPageState extends State<SettingsPage>
     required bool isDark,
   }) {
     final theme = Theme.of(context);
-    final groupColor = isDark
-        ? const Color(0xFF1C1C1E)
-        : const Color(0xFFF2F2F7);
     
-    return Container(
-      decoration: BoxDecoration(
-        color: groupColor,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: _navigateToManageProfiles,
-          borderRadius: BorderRadius.circular(10),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Center(
-                    child: Text(
-                      profileInitials,
-                      style: TextStyle(
-                        color: theme.colorScheme.onPrimary,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
-                      ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _navigateToManageProfiles,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary,
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Text(
+                    profileInitials,
+                    style: TextStyle(
+                      color: theme.colorScheme.onPrimary,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        profileName,
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w600,
-                          color: theme.colorScheme.onSurface,
-                        ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      profileName,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: theme.colorScheme.onSurface,
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Click to manage profiles',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: theme.colorScheme.onSurface.withOpacity(0.6),
-                        ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Manage profiles',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: theme.colorScheme.onSurface.withOpacity(0.6),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                Icon(
-                  Icons.chevron_right,
-                  size: 20,
-                  color: theme.colorScheme.onSurface.withOpacity(0.3),
-                ),
-              ],
-            ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                size: 20,
+                color: theme.colorScheme.onSurface.withOpacity(0.3),
+              ),
+            ],
           ),
         ),
       ),
@@ -652,11 +651,13 @@ class _SettingsPageState extends State<SettingsPage>
 
   Widget _buildSectionHeader({required String title}) {
     return Padding(
-      padding: const EdgeInsets.only(left: 4),
+      padding: const EdgeInsets.only(left: 4, bottom: 8),
       child: Text(
-        title,
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+        title.toUpperCase(),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
               fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
             ),
       ),
     );
@@ -664,22 +665,12 @@ class _SettingsPageState extends State<SettingsPage>
 
   Widget _buildSettingsCard({required List<Widget> children}) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     
     return Container(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: theme.colorScheme.outline.withOpacity(0.1),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         children: children,
@@ -703,19 +694,15 @@ class _SettingsPageState extends State<SettingsPage>
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
           child: Row(
             children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
+              SizedBox(
+                width: 40,
+                height: 40,
                 child: Icon(
                   icon,
-                  size: 20,
+                  size: 22,
                   color: theme.colorScheme.primary,
                 ),
               ),
@@ -725,7 +712,8 @@ class _SettingsPageState extends State<SettingsPage>
                   title,
                   style: theme.textTheme.bodyLarge?.copyWith(
                     color: titleColor ?? theme.colorScheme.onSurface,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w400,
+                    fontSize: 16,
                   ),
                 ),
               ),
@@ -733,9 +721,9 @@ class _SettingsPageState extends State<SettingsPage>
                 trailing
               else if (showTrailing && onTap != null)
                 Icon(
-                  Icons.arrow_forward_ios_rounded,
-                  size: 16,
-                  color: theme.colorScheme.outline.withOpacity(0.5),
+                  Icons.chevron_right,
+                  size: 18,
+                  color: theme.colorScheme.onSurface.withOpacity(0.3),
                 ),
             ],
           ),
@@ -746,13 +734,16 @@ class _SettingsPageState extends State<SettingsPage>
 
   Widget _buildDivider(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.only(left: 56),
       child: Divider(
         height: 0.5,
         thickness: 0.5,
-        color: theme.colorScheme.outline.withOpacity(0.1),
+        color: isDark
+            ? Colors.white.withOpacity(0.1)
+            : Colors.black.withOpacity(0.1),
       ),
     );
   }
@@ -760,55 +751,39 @@ class _SettingsPageState extends State<SettingsPage>
   Widget _buildSupportDevelopersButton() {
     final theme = Theme.of(context);
     
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            theme.colorScheme.primary.withOpacity(0.9),
-            theme.colorScheme.primary.withOpacity(0.7),
-          ],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: theme.colorScheme.primary.withOpacity(0.3),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _openSupportLink,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            color: theme.colorScheme.primary.withOpacity(0.1),
           ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: _openSupportLink,
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                AnimatedBuilder(
-                  animation: _shimmerController,
-                  builder: (context, child) {
-                    return Icon(
-                      Icons.favorite_rounded,
-                      color: theme.colorScheme.onPrimary,
-                      size: 20 * (1 + 0.1 * _shimmerController.value),
-                    );
-                  },
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              AnimatedBuilder(
+                animation: _shimmerController,
+                builder: (context, child) {
+                  return Icon(
+                    Icons.favorite_rounded,
+                    color: theme.colorScheme.primary,
+                    size: 20 * (1 + 0.1 * _shimmerController.value),
+                  );
+                },
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Support the Developers',
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w500,
                 ),
-                const SizedBox(width: 12),
-                Text(
-                  'Support the Developers',
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    color: theme.colorScheme.onPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

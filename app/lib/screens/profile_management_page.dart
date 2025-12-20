@@ -12,6 +12,7 @@ class ProfileManagementPage extends StatefulWidget {
 class _ProfileManagementPageState extends State<ProfileManagementPage> {
   final ProfileRepository _profileRepo = ProfileRepository();
   List<Profile> _profiles = [];
+  int? _activeProfileId;
   bool _isLoading = true;
 
   @override
@@ -23,11 +24,22 @@ class _ProfileManagementPageState extends State<ProfileManagementPage> {
   Future<void> _loadProfiles() async {
     setState(() => _isLoading = true);
     final profiles = await _profileRepo.getProfiles();
+    final activeId = await _profileRepo.getActiveProfileId();
     if (mounted) {
       setState(() {
         _profiles = profiles;
+        _activeProfileId = activeId;
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _setActiveProfile(int profileId) async {
+    await _profileRepo.setActiveProfile(profileId);
+    _loadProfiles();
+    // Notify settings page to refresh
+    if (mounted) {
+      Navigator.pop(context, true);
     }
   }
 
@@ -64,6 +76,15 @@ class _ProfileManagementPageState extends State<ProfileManagementPage> {
   }
 
   Future<void> _deleteProfile(Profile profile) async {
+    if (_profiles.length <= 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You must have at least one profile'),
+        ),
+      );
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -86,7 +107,17 @@ class _ProfileManagementPageState extends State<ProfileManagementPage> {
     );
 
     if (confirmed == true && profile.id != null) {
+      final wasActive = profile.id == _activeProfileId;
       await _profileRepo.deleteProfile(profile.id!);
+      
+      // If we deleted the active profile, set the first remaining profile as active
+      if (wasActive) {
+        final remainingProfiles = await _profileRepo.getProfiles();
+        if (remainingProfiles.isNotEmpty && remainingProfiles.first.id != null) {
+          await _profileRepo.setActiveProfile(remainingProfiles.first.id!);
+        }
+      }
+      
       _loadProfiles();
     }
   }
@@ -95,14 +126,11 @@ class _ProfileManagementPageState extends State<ProfileManagementPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final groupColor = isDark
-        ? const Color(0xFF1C1C1E)
-        : const Color(0xFFF2F2F7);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Profiles'),
-        backgroundColor: theme.scaffoldBackgroundColor,
+        backgroundColor: Colors.transparent,
         elevation: 0,
       ),
       body: _isLoading
@@ -111,39 +139,37 @@ class _ProfileManagementPageState extends State<ProfileManagementPage> {
               padding: const EdgeInsets.all(16),
               children: [
                 // Create Profile Button
-                Container(
-                  decoration: BoxDecoration(
-                    color: groupColor,
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: _createProfile,
                     borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: _createProfile,
-                      borderRadius: BorderRadius.circular(10),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 14,
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.add_circle_outline,
-                              size: 22,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.add_circle_outline,
+                            size: 22,
+                            color: theme.colorScheme.primary,
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            'Create Profile',
+                            style: TextStyle(
+                              fontSize: 17,
                               color: theme.colorScheme.primary,
+                              fontWeight: FontWeight.w400,
                             ),
-                            const SizedBox(width: 12),
-                            Text(
-                              'Create Profile',
-                              style: TextStyle(
-                                fontSize: 17,
-                                color: theme.colorScheme.primary,
-                                fontWeight: FontWeight.w400,
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -166,7 +192,7 @@ class _ProfileManagementPageState extends State<ProfileManagementPage> {
                 else
                   Container(
                     decoration: BoxDecoration(
-                      color: groupColor,
+                      color: Colors.transparent,
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Column(
@@ -175,6 +201,7 @@ class _ProfileManagementPageState extends State<ProfileManagementPage> {
                           _buildProfileItem(
                             context: context,
                             profile: _profiles[i],
+                            isActive: _profiles[i].id == _activeProfileId,
                             isFirst: i == 0,
                             isLast: i == _profiles.length - 1,
                           ),
@@ -200,6 +227,7 @@ class _ProfileManagementPageState extends State<ProfileManagementPage> {
   Widget _buildProfileItem({
     required BuildContext context,
     required Profile profile,
+    required bool isActive,
     required bool isFirst,
     required bool isLast,
   }) {
@@ -209,7 +237,7 @@ class _ProfileManagementPageState extends State<ProfileManagementPage> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () => _renameProfile(profile),
+        onTap: profile.id != null ? () => _setActiveProfile(profile.id!) : null,
         borderRadius: BorderRadius.vertical(
           top: isFirst ? const Radius.circular(10) : Radius.zero,
           bottom: isLast ? const Radius.circular(10) : Radius.zero,
@@ -238,15 +266,42 @@ class _ProfileManagementPageState extends State<ProfileManagementPage> {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  profile.name,
-                  style: TextStyle(
-                    fontSize: 17,
-                    color: theme.colorScheme.onSurface,
-                    fontWeight: FontWeight.w400,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      profile.name,
+                      style: TextStyle(
+                        fontSize: 17,
+                        color: theme.colorScheme.onSurface,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                    if (isActive)
+                      Text(
+                        'Active',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                  ],
                 ),
               ),
+              if (isActive)
+                Icon(
+                  Icons.check_circle,
+                  size: 24,
+                  color: theme.colorScheme.primary,
+                )
+              else
+                Icon(
+                  Icons.radio_button_unchecked,
+                  size: 24,
+                  color: theme.colorScheme.onSurface.withOpacity(0.3),
+                ),
+              const SizedBox(width: 8),
               IconButton(
                 icon: Icon(
                   Icons.edit_outlined,

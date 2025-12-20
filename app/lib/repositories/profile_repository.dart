@@ -1,4 +1,5 @@
 import 'package:sqflite/sqflite.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:totals/database/database_helper.dart';
 import 'package:totals/models/profile.dart';
 
@@ -106,8 +107,35 @@ class ProfileRepository {
         name: 'Personal',
         createdAt: DateTime.now(),
       );
-      await saveProfile(defaultProfile);
+      final profileId = await saveProfile(defaultProfile);
+      // Set as active profile
+      await setActiveProfile(profileId);
+    } else {
+      // Ensure there's an active profile
+      final activeId = await getActiveProfileId();
+      if (activeId == null) {
+        final profiles = await getProfiles();
+        if (profiles.isNotEmpty && profiles.first.id != null) {
+          await setActiveProfile(profiles.first.id!);
+        }
+      }
     }
+  }
+
+  Future<void> setActiveProfile(int profileId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('active_profile_id', profileId);
+  }
+
+  Future<int?> getActiveProfileId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt('active_profile_id');
+  }
+
+  Future<Profile?> getActiveProfile() async {
+    final activeId = await getActiveProfileId();
+    if (activeId == null) return null;
+    return await getProfile(activeId);
   }
 }
 
