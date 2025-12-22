@@ -246,12 +246,17 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
 
   bool _matchesPeriod(DateTime transactionDate, DateTime baseDate) {
     if (_selectedPeriod == 'Week') {
-      final daysSinceMonday = (baseDate.weekday - 1) % 7;
-      final weekStart = DateTime(baseDate.year, baseDate.month, baseDate.day)
-          .subtract(Duration(days: daysSinceMonday));
-      return transactionDate
-              .isAfter(weekStart.subtract(const Duration(days: 1))) &&
-          transactionDate.isBefore(baseDate.add(const Duration(days: 1)));
+      final baseDay = DateTime(baseDate.year, baseDate.month, baseDate.day);
+      final daysSinceMonday = (baseDay.weekday - 1) % 7;
+      final weekStart = baseDay.subtract(Duration(days: daysSinceMonday));
+      final weekEnd = weekStart.add(const Duration(days: 6));
+      final transactionDay = DateTime(
+        transactionDate.year,
+        transactionDate.month,
+        transactionDate.day,
+      );
+      return !transactionDay.isBefore(weekStart) &&
+          !transactionDay.isAfter(weekEnd);
     } else if (_selectedPeriod == 'Month') {
       return transactionDate.year == baseDate.year &&
           transactionDate.month == baseDate.month;
