@@ -26,6 +26,8 @@ import 'package:totals/data/consts.dart';
 import 'package:totals/utils/text_utils.dart';
 import 'package:totals/widgets/today_transactions_list.dart';
 import 'package:totals/widgets/categorize_transaction_sheet.dart';
+import 'package:totals/widgets/category_filter_button.dart';
+import 'package:totals/widgets/category_filter_sheet.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -56,6 +58,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   StreamSubscription<NotificationIntent>? _notificationIntentSub;
   String? _pendingNotificationReference;
   String? _highlightedReference;
+  Set<int?> _selectedTodayIncomeCategoryIds = {};
+  Set<int?> _selectedTodayExpenseCategoryIds = {};
 
   @override
   void initState() {
@@ -484,6 +488,54 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }).toList(growable: false);
   }
 
+  bool _matchesCategorySelection(int? categoryId, Set<int?> selection) {
+    if (selection.isEmpty) return true;
+    if (categoryId == null) return selection.contains(null);
+    return selection.contains(categoryId);
+  }
+
+  bool _matchesCategoryFilter(Transaction transaction) {
+    if (_selectedTodayIncomeCategoryIds.isEmpty &&
+        _selectedTodayExpenseCategoryIds.isEmpty) {
+      return true;
+    }
+    if (transaction.type == 'CREDIT') {
+      return _matchesCategorySelection(
+          transaction.categoryId, _selectedTodayIncomeCategoryIds);
+    }
+    if (transaction.type == 'DEBIT') {
+      return _matchesCategorySelection(
+          transaction.categoryId, _selectedTodayExpenseCategoryIds);
+    }
+    return true;
+  }
+
+  List<Transaction> _filterByCategory(List<Transaction> transactions) {
+    return transactions.where(_matchesCategoryFilter).toList(growable: false);
+  }
+
+  Future<void> _openTodayCategoryFilterSheet(
+    TransactionProvider provider, {
+    required String flow,
+  }) async {
+    final result = await showCategoryFilterSheet(
+      context: context,
+      provider: provider,
+      selectedCategoryIds: flow == 'income'
+          ? _selectedTodayIncomeCategoryIds
+          : _selectedTodayExpenseCategoryIds,
+      flow: flow,
+    );
+    if (result == null) return;
+    setState(() {
+      if (flow == 'income') {
+        _selectedTodayIncomeCategoryIds = result.toSet();
+      } else {
+        _selectedTodayExpenseCategoryIds = result.toSet();
+      }
+    });
+  }
+
   Widget _buildHomeContent(TransactionProvider provider) {
     final tabs = _getTabs();
 
@@ -618,6 +670,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                               Builder(
                                 builder: (context) {
                                   final today = _todayTransactions(provider);
+                                  final filteredToday =
+                                      _filterByCategory(today);
                                   return Padding(
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 16,
@@ -627,39 +681,82 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                       mainAxisAlignment:
                                           MainAxisAlignment.spaceBetween,
                                       children: [
-                                        Text(
-                                          "Today's transactions",
-                                          style: TextStyle(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .onSurface,
+                                        Flexible(
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                "Today's transactions",
+                                                style: TextStyle(
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurface,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: 10,
+                                                  vertical: 6,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .primary
+                                                      .withOpacity(0.1),
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                ),
+                                                child: Text(
+                                                  '${filteredToday.length}',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: Theme.of(context)
+                                                        .colorScheme
+                                                        .primary,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 10,
-                                            vertical: 6,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .primary
-                                                .withOpacity(0.1),
-                                            borderRadius:
-                                                BorderRadius.circular(12),
-                                          ),
-                                          child: Text(
-                                            '${today.length}',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w600,
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .primary,
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            CategoryFilterIconButton(
+                                              icon: Icons.category_rounded,
+                                              iconColor: Colors.green,
+                                              selectedCount:
+                                                  _selectedTodayIncomeCategoryIds
+                                                      .length,
+                                              tooltip: 'Income categories',
+                                              onTap: () =>
+                                                  _openTodayCategoryFilterSheet(
+                                                provider,
+                                                flow: 'income',
+                                              ),
                                             ),
-                                          ),
+                                            const SizedBox(width: 8),
+                                            CategoryFilterIconButton(
+                                              icon: Icons.category_rounded,
+                                              iconColor: Theme.of(context)
+                                                  .colorScheme
+                                                  .error,
+                                              selectedCount:
+                                                  _selectedTodayExpenseCategoryIds
+                                                      .length,
+                                              tooltip: 'Expense categories',
+                                              onTap: () =>
+                                                  _openTodayCategoryFilterSheet(
+                                                provider,
+                                                flow: 'expense',
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ],
                                     ),
@@ -669,12 +766,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                               Builder(
                                 builder: (context) {
                                   final today = _todayTransactions(provider);
+                                  final filteredToday =
+                                      _filterByCategory(today);
                                   return Padding(
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 16,
                                     ),
                                     child: TodayTransactionsList(
-                                      transactions: today,
+                                      transactions: filteredToday,
                                       provider: provider,
                                       highlightedReference:
                                           _highlightedReference,
