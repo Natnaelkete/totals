@@ -139,8 +139,9 @@ class _TransactionsForPeriodPageState extends State<TransactionsForPeriodPage> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           CategoryFilterIconButton(
-                            icon: Icons.category_rounded,
+                            icon: Icons.toc_rounded,
                             iconColor: Colors.green,
+                            flipIconHorizontally: true,
                             selectedCount:
                                 _selectedIncomeCategoryIds.length,
                             tooltip: 'Income categories',
@@ -149,8 +150,9 @@ class _TransactionsForPeriodPageState extends State<TransactionsForPeriodPage> {
                           ),
                           const SizedBox(width: 8),
                           CategoryFilterIconButton(
-                            icon: Icons.category_rounded,
+                            icon: Icons.toc_rounded,
                             iconColor: Theme.of(context).colorScheme.error,
+                            flipIconHorizontally: true,
                             selectedCount:
                                 _selectedExpenseCategoryIds.length,
                             tooltip: 'Expense categories',

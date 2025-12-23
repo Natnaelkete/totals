@@ -743,8 +743,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
                                             CategoryFilterIconButton(
-                                              icon: Icons.category_rounded,
+                                              icon: Icons.toc_rounded,
                                               iconColor: Colors.green,
+                                              flipIconHorizontally: true,
                                               selectedCount:
                                                   _selectedTodayIncomeCategoryIds
                                                       .length,
@@ -757,10 +758,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                             ),
                                             const SizedBox(width: 8),
                                             CategoryFilterIconButton(
-                                              icon: Icons.category_rounded,
+                                              icon: Icons.toc_rounded,
                                               iconColor: Theme.of(context)
                                                   .colorScheme
                                                   .error,
+                                              flipIconHorizontally: true,
                                               selectedCount:
                                                   _selectedTodayExpenseCategoryIds
                                                       .length,

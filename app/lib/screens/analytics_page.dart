@@ -602,10 +602,11 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         CategoryFilterIconButton(
-                          icon: Icons.category_rounded,
+                          icon: Icons.toc_rounded,
                           selectedCount: _selectedIncomeCategoryIds.length,
                           tooltip: 'Income categories',
                           iconColor: Colors.green,
+                          flipIconHorizontally: true,
                           onTap: () => _openCategoryFilterSheet(
                             provider: provider,
                             flow: 'income',
@@ -613,10 +614,11 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                         ),
                         const SizedBox(width: 8),
                         CategoryFilterIconButton(
-                          icon: Icons.category_rounded,
+                          icon: Icons.toc_rounded,
                           selectedCount: _selectedExpenseCategoryIds.length,
                           tooltip: 'Expense categories',
                           iconColor: Theme.of(context).colorScheme.error,
+                          flipIconHorizontally: true,
                           onTap: () => _openCategoryFilterSheet(
                             provider: provider,
                             flow: 'expense',

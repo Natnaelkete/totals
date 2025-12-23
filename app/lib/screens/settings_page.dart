@@ -632,8 +632,9 @@ class _SettingsPageState extends State<SettingsPage>
                 ),
                             _buildDivider(context),
                             _buildSettingTile(
-                              icon: Icons.category_rounded,
+                              icon: Icons.toc_rounded,
                               title: 'Categories',
+                              flipIconHorizontally: true,
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
@@ -855,8 +856,21 @@ class _SettingsPageState extends State<SettingsPage>
     Widget? trailing,
     VoidCallback? onTap,
     bool showTrailing = true,
+    bool flipIconHorizontally = false,
   }) {
     final theme = Theme.of(context);
+    Widget leadingIcon = Icon(
+      icon,
+      size: 22,
+      color: theme.colorScheme.primary,
+    );
+    if (flipIconHorizontally) {
+      leadingIcon = Transform(
+        alignment: Alignment.center,
+        transform: Matrix4.identity()..scale(-1.0, 1.0, 1.0),
+        child: leadingIcon,
+      );
+    }
     
     return Material(
       color: Colors.transparent,
@@ -870,11 +884,7 @@ class _SettingsPageState extends State<SettingsPage>
               SizedBox(
                 width: 40,
                 height: 40,
-                child: Icon(
-                  icon,
-                  size: 22,
-                  color: theme.colorScheme.primary,
-                ),
+                child: leadingIcon,
               ),
               const SizedBox(width: 12),
               Expanded(

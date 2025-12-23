@@ -87,6 +87,7 @@ class CategoryFilterIconButton extends StatelessWidget {
   final VoidCallback onTap;
   final String? tooltip;
   final Color? iconColor;
+  final bool flipIconHorizontally;
 
   const CategoryFilterIconButton({
     super.key,
@@ -95,6 +96,7 @@ class CategoryFilterIconButton extends StatelessWidget {
     required this.onTap,
     this.tooltip,
     this.iconColor,
+    this.flipIconHorizontally = false,
   });
 
   @override
@@ -113,6 +115,19 @@ class CategoryFilterIconButton extends StatelessWidget {
             : theme.colorScheme.onSurfaceVariant)
         : (isActive ? iconColor! : iconColor!.withOpacity(0.7));
 
+    Widget iconWidget = Icon(
+      icon,
+      size: 20,
+      color: resolvedIconColor,
+    );
+    if (flipIconHorizontally) {
+      iconWidget = Transform(
+        alignment: Alignment.center,
+        transform: Matrix4.identity()..scale(-1.0, 1.0, 1.0),
+        child: iconWidget,
+      );
+    }
+
     final button = Material(
       color: Colors.transparent,
       child: InkWell(
@@ -130,11 +145,7 @@ class CategoryFilterIconButton extends StatelessWidget {
             clipBehavior: Clip.none,
             children: [
               Center(
-                child: Icon(
-                  icon,
-                  size: 20,
-                  color: resolvedIconColor,
-                ),
+                child: iconWidget,
               ),
               if (isActive)
                 Positioned(
