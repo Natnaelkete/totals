@@ -6,10 +6,10 @@ import '../models/transaction.dart';
 import '../utils/math_utils.dart';
 
 class InsightsService {
-  const int _scoreVersion = 2; // v1 = no categories, v2 = category aware.
+  static const int _scoreVersion = 2; // v1 = no categories, v2 = category aware.
   final List<Transaction> Function() _getTransactions;
 
-  // function that maps categoryId to Category?
+  // function that maps categoryId to Category? (nullable Category)
   final Category? Function(int? categoryId)? _getCategoryById;
 
   // small memoization cache, will be cleared
@@ -51,6 +51,17 @@ class InsightsService {
         ? 0.0
         : (categoryBreakdown.essential / categorizedTotal).clamp(0.0, 1.0);
 
+    // Log coverage levels for production tracking
+    _logCoverageMetrics(
+      categorizedCoverage: categorizedCoverage,
+      categorizedTotal: categorizedTotal,
+      totalExpense: totalExpense,
+      essential: categoryBreakdown.essential,
+      nonEssential: categoryBreakdown.nonEssential,
+      uncategorized: categoryBreakdown.uncategorized,
+      essentialsRatio: essentialsRatio,
+    );
+
     final patterns = _spendingPatterns(transactions);
     // we add these to the summary map so that the UI
     // can use them later.
@@ -72,7 +83,7 @@ class InsightsService {
       variance: patterns["spendVariance"].toDouble(),
       stabilityIndex: patterns["stablityIndex"].toDouble(),
       essentialsRatio: patterns["essentialsRatio"].toDouble(),
-      categorizedCoverage: patterns["categorizedCoverate"].toDouble(),
+      categorizedCoverage: patterns["categorizedCoverage"].toDouble(),
       // essentialsRatio removed from health score calculation
       // Will be improved in the future when better categorization is available
     );
@@ -206,6 +217,13 @@ class InsightsService {
         continue;
       }
 
+      // Categories with uncategorized flag should be treated as uncategorized
+      // (e.g., built-in "Misc" category)
+      if (category.uncategorized) {
+        uncategorized += amount;
+        continue;
+      }
+
       // if an "income" category is attached to an expense
       if (category.flow.toLowerCase() == "income") {
         nonEssential += amount;
@@ -246,16 +264,20 @@ class InsightsService {
     // i.e. how much of the sms messages have been
     // categorized. In most cases, at this early stage of the app,
     // users will have categorized only a small percentage of the sms messages,
-    // so the rest will be "uncategorized". This will affect the calculatioin
+    // so the rest will be "uncategorized". This will affect the calculation
     // of the financial health score. So we will make sure that it will not make
     // the results biased, by using the coverage factor to derive 
     // the essentials component of the equation.
-    double coverageFactor = 0.1;
+    // Higher coverage = more confidence = higher weight for essentials component
+    double coverageFactor = 0.0;
     if (categorizedCoverage < 0.3) {
+      // Low coverage: don't use essentials ratio at all
       coverageFactor = 0.0;
-    } else if (categorizedCoverage > 0.7) {
+    } else if (categorizedCoverage >= 0.3 && categorizedCoverage <= 0.7) {
+      // Medium coverage: partial weight
       coverageFactor = 0.5;
     } else {
+      // High coverage (> 0.7): full weight
       coverageFactor = 1.0;
     }
 
@@ -402,6 +424,38 @@ class InsightsService {
     final beforeLast = sorted[sorted.length - 2].value;
 
     return last - beforeLast;
+  }
+
+  /// Log coverage metrics for production tracking
+  /// This helps us understand user categorization patterns and coverage levels
+  void _logCoverageMetrics({
+    required double categorizedCoverage,
+    required double categorizedTotal,
+    required double totalExpense,
+    required double essential,
+    required double nonEssential,
+    required double uncategorized,
+    required double essentialsRatio,
+  }) {
+    // Determine coverage level for logging
+    String coverageLevel;
+    if (categorizedCoverage < 0.3) {
+      coverageLevel = 'LOW';
+    } else if (categorizedCoverage <= 0.7) {
+      coverageLevel = 'MEDIUM';
+    } else {
+      coverageLevel = 'HIGH';
+    }
+
+    // Log structured data for production analysis
+    print('[INSIGHTS_COVERAGE] coverage: ${(categorizedCoverage * 100).toStringAsFixed(1)}%, '
+        'level: $coverageLevel, '
+        'categorized: ${categorizedTotal.toStringAsFixed(2)}, '
+        'total: ${totalExpense.toStringAsFixed(2)}, '
+        'essential: ${essential.toStringAsFixed(2)}, '
+        'nonEssential: ${nonEssential.toStringAsFixed(2)}, '
+        'uncategorized: ${uncategorized.toStringAsFixed(2)}, '
+        'essentialsRatio: ${(essentialsRatio * 100).toStringAsFixed(1)}%');
   }
 }
 

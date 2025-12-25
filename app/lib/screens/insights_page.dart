@@ -6,6 +6,7 @@ import 'package:totals/models/transaction.dart';
 import 'package:totals/providers/transaction_provider.dart';
 import 'package:totals/services/financial_insights.dart';
 import 'package:totals/widgets/insights/insights_explainer_bottomsheet.dart';
+import 'package:totals/screens/transactions_for_period_page.dart';
 
 class InsightsPage extends StatelessWidget {
   final List<Transaction> transactions;
@@ -159,6 +160,16 @@ class InsightsPage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
+                // Show categorization encouragement banner when coverage is low
+                if (lowCoverage) ...[
+                  _buildCategorizationBanner(
+                    context,
+                    categorizedCoverage,
+                    transactions,
+                    txProvider,
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 _buildScoreCard(context, score, lowCoverage: lowCoverage),
                 const SizedBox(height: 12),
                 _buildStabilityCard(
@@ -717,6 +728,149 @@ class InsightsPage extends StatelessWidget {
     if (value is int) return value.toDouble();
     if (value is String) return double.tryParse(value) ?? 0.0;
     return 0.0;
+  }
+
+  Widget _buildCategorizationBanner(
+    BuildContext context,
+    double categorizedCoverage,
+    List<Transaction> transactions,
+    TransactionProvider provider,
+  ) {
+    final coveragePercent = (categorizedCoverage * 100).toStringAsFixed(0);
+    final uncategorizedCount = transactions
+        .where((t) => !_isIncome(t) && t.categoryId == null)
+        .length;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Theme.of(context).colorScheme.primary.withOpacity(0.15),
+            Theme.of(context).colorScheme.primary.withOpacity(0.05),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  Icons.label_outline,
+                  color: Theme.of(context).colorScheme.primary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Improve Your Insights',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$coveragePercent% of your spending is categorized. '
+                      'Categorize more transactions for better insights!',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    // Navigate to transactions page filtered to uncategorized
+                    final uncategorizedTransactions = transactions
+                        .where((t) => !_isIncome(t) && t.categoryId == null)
+                        .toList();
+                    
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => TransactionsForPeriodPage(
+                          transactions: uncategorizedTransactions.isEmpty
+                              ? transactions
+                              : uncategorizedTransactions,
+                          provider: provider,
+                          title: uncategorizedTransactions.isEmpty
+                              ? 'All Transactions'
+                              : 'Uncategorized Transactions',
+                          subtitle: uncategorizedTransactions.isEmpty
+                              ? null
+                              : '$uncategorizedCount transactions need categorization',
+                        ),
+                      ),
+                    );
+                  },
+                  icon: Icon(
+                    Icons.edit_outlined,
+                    size: 18,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  label: Text(
+                    uncategorizedCount > 0
+                        ? 'Categorize $uncategorizedCount Transactions'
+                        : 'View Transactions',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    side: BorderSide(
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 1.5,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  bool _isIncome(Transaction t) {
+    final type = t.type?.toUpperCase() ?? '';
+    if (type.contains("CREDIT")) return true;
+    if (type.contains("DEBIT")) return false;
+    return t.amount >= 0;
   }
 }
 

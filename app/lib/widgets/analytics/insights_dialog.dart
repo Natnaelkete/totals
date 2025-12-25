@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:totals/services/financial_insights.dart';
 import 'package:totals/models/transaction.dart';
+import 'package:totals/providers/transaction_provider.dart';
 import 'package:intl/intl.dart';
 
 class InsightsDialog extends StatelessWidget {
@@ -21,7 +23,11 @@ class InsightsDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final insightsService = InsightsService(() => transactions);
+    final txProvider = Provider.of<TransactionProvider>(context, listen: false);
+    final insightsService = InsightsService(
+      () => transactions,
+      getCategoryById: txProvider.getCategoryById,
+    );
     final insights = insightsService.summarize();
 
     final score = insights['score']['value'] as int;

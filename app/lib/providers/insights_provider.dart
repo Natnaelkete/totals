@@ -11,7 +11,10 @@ class InsightsProvider extends ChangeNotifier {
       : _txProvider = txProvider {
     // we will use live transactions from existing provider,
 
-    _service = InsightsService(() => _txProvider.transactions);
+    _service = InsightsService(
+      () => _txProvider.transactions,
+      getCategoryById: _txProvider.getCategoryById,
+    );
     _txProvider.addListener(_onTxChange);
   }
 
@@ -23,6 +26,11 @@ class InsightsProvider extends ChangeNotifier {
 
     _txProvider.removeListener(_onTxChange);
     _txProvider = newProvider;
+    // Recreate service with new provider's getCategoryById
+    _service = InsightsService(
+      () => _txProvider.transactions,
+      getCategoryById: _txProvider.getCategoryById,
+    );
     _txProvider.addListener(_onTxChange);
     _service.invalidate(); // clear the cache
     notifyListeners();
