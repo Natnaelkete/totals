@@ -9,7 +9,7 @@ class MapKeys {
   static const String nonEssentialSpend = 'nonEssentialSpend';
   static const String uncategorizedSpend = 'uncategorizedSpend';
   static const String byCategory = 'byCategory';
-  
+
   // Summary map keys
   static const String totalIncome = 'totalIncome';
   static const String totalExpense = 'totalExpense';

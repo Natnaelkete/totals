@@ -29,401 +29,294 @@ class InsightsPage extends StatelessWidget {
     );
 
     final insights = insightsService.summarize();
-    try {
-      final score = (insights[MapKeys.score] as Map<String, dynamic>)['value'] as int;
-      final projections = insights[MapKeys.projections] as Map<String, dynamic>;
-      final budget = insights[MapKeys.budget] as Map<String, dynamic>;
-      final patterns = insights[MapKeys.patterns] as Map<String, dynamic>;
-      final recurring = insights[MapKeys.recurring] as List<dynamic>;
-      final anomalies = insights[MapKeys.anomalies] as List<Transaction>;
-      final incomeAnomalies = insights[MapKeys.incomeAnomalies] as List<Transaction>;
-      final totalIncome = _toDouble(insights[MapKeys.totalIncome]);
-      final totalExpense = _toDouble(insights[MapKeys.totalExpense]);
+    final score =
+        (insights[MapKeys.score] as Map<String, dynamic>)['value'] as int;
+    final projections = insights[MapKeys.projections] as Map<String, dynamic>;
+    final budget = insights[MapKeys.budget] as Map<String, dynamic>;
+    final patterns = insights[MapKeys.patterns] as Map<String, dynamic>;
+    final recurring = insights[MapKeys.recurring] as List<dynamic>;
+    final anomalies = insights[MapKeys.anomalies] as List<Transaction>;
+    final incomeAnomalies =
+        insights[MapKeys.incomeAnomalies] as List<Transaction>;
+    final totalIncome = _toDouble(insights[MapKeys.totalIncome]);
+    final totalExpense = _toDouble(insights[MapKeys.totalExpense]);
 
-      final formatter = NumberFormat.currency(symbol: 'ETB ', decimalDigits: 2);
+    final formatter = NumberFormat.currency(symbol: 'ETB ', decimalDigits: 2);
 
-      final double categorizedCoverage =
-          _toDouble(patterns[MapKeys.categorizedCoverage]);
-      final bool lowCoverage = categorizedCoverage < 0.7;
+    final double categorizedCoverage =
+        _toDouble(patterns[MapKeys.categorizedCoverage]);
+    final bool lowCoverage = categorizedCoverage < 0.7;
 
-      return Scaffold(
-        extendBodyBehindAppBar: true,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          centerTitle: false,
-          titleSpacing: 16,
-          title: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                ),
-                child: Icon(
-                  Icons.lightbulb,
-                  color: Theme.of(context).colorScheme.primary,
-                  size: 22,
-                ),
+    return Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: false,
+        titleSpacing: 16,
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
               ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Financial Insights',
+              child: Icon(
+                Icons.lightbulb,
+                color: Theme.of(context).colorScheme.primary,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Financial Insights',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (periodLabel != null)
+                  Text(
+                    periodLabel!,
                     style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
-                  if (periodLabel != null)
-                    Text(
-                      periodLabel!,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
-          actions: [
-            IconButton(
-              icon: Icon(
-                Icons.help_outline,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-              tooltip: 'Learn More',
-              onPressed: () {
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (context) => const InsightsExplainerBottomSheet(),
-                );
-              },
+              ],
             ),
           ],
         ),
-        body: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Theme.of(context).colorScheme.primary.withOpacity(0.08),
-                Theme.of(context).scaffoldBackgroundColor,
+        actions: [
+          IconButton(
+            icon: Icon(
+              Icons.help_outline,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+            tooltip: 'Learn More',
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (context) => const InsightsExplainerBottomSheet(),
+              );
+            },
+          ),
+        ],
+      ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Theme.of(context).colorScheme.primary.withOpacity(0.08),
+              Theme.of(context).scaffoldBackgroundColor,
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Show categorization encouragement banner when coverage is low
+                if (lowCoverage) ...[
+                  _buildCategorizationBanner(
+                    context,
+                    categorizedCoverage,
+                    transactions,
+                    txProvider,
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                _buildScoreCard(context, score, lowCoverage: lowCoverage),
+                const SizedBox(height: 12),
+                _buildStabilityCard(
+                  context,
+                  _toDouble(patterns[MapKeys.spendVariance]),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildSummaryCard(
+                        context,
+                        'Total Income',
+                        formatter.format(totalIncome),
+                        Icons.trending_up,
+                        Colors.green,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildSummaryCard(
+                        context,
+                        'Total Expense',
+                        formatter.format(totalExpense),
+                        Icons.trending_down,
+                        Colors.red,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _buildSectionCard(
+                  context,
+                  'Projections',
+                  Icons.auto_graph,
+                  [
+                    _buildInfoRow(
+                      context,
+                      'Projected Income',
+                      formatter.format(
+                        _toDouble(projections['projectedIncome']),
+                      ),
+                    ),
+                    _buildInfoRow(
+                      context,
+                      'Projected Expense',
+                      formatter.format(
+                        _toDouble(projections['projectedExpense']),
+                      ),
+                    ),
+                    _buildInfoRow(
+                      context,
+                      'Projected Savings',
+                      formatter.format(
+                        _toDouble(projections['projectedSavings']),
+                      ),
+                      isHighlight: true,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _buildSectionCard(
+                  context,
+                  'Budget Tips',
+                  Icons.savings,
+                  [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text(
+                        budget['tip'] as String,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                    // Removed needs/wants targets - will be improved in the future
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _buildSectionCard(
+                  context,
+                  'Unusual Expenses',
+                  Icons.warning_amber_rounded,
+                  anomalies.isEmpty
+                      ? [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Text(
+                              'No unusual expenses detected. Your spending is consistent.',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ]
+                      : anomalies.take(5).map((t) {
+                          return _buildInfoRow(
+                            context,
+                            '${_bankLabel(t.bankId)} • ${_dateLabel(t.time)}',
+                            formatter.format(t.amount),
+                            isHighlight: true,
+                          );
+                        }).toList(),
+                ),
+                if (incomeAnomalies.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  _buildSectionCard(
+                    context,
+                    'Unusual Income',
+                    Icons.trending_up,
+                    incomeAnomalies.take(5).map((t) {
+                      return _buildInfoRow(
+                        context,
+                        '${_bankLabel(t.bankId)} • ${_dateLabel(t.time)}',
+                        formatter.format(t.amount),
+                        isHighlight: true,
+                      );
+                    }).toList(),
+                  ),
+                ],
+                if (patterns['spendVariance'] != null) ...[
+                  const SizedBox(height: 16),
+                  _buildSectionCard(
+                    context,
+                    'Spending Patterns',
+                    Icons.insights,
+                    [
+                      ...(patterns[MapKeys.byCategory] as Map<String, dynamic>)
+                          .entries
+                          .map(
+                        (entry) {
+                          final label = entry.key;
+                          final value = _toDouble(entry.value);
+                          String suffix = '';
+
+                          // Show percentage of total expenses for debit-like categories.
+                          if (totalExpense > 0 && label != 'CREDIT') {
+                            final pct = (value / totalExpense) * 100;
+                            suffix = ' (${pct.toStringAsFixed(1)}%)';
+                          }
+
+                          return _buildInfoRow(
+                            context,
+                            label,
+                            '${formatter.format(value)}$suffix',
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      const Divider(),
+                      const SizedBox(height: 12),
+                      _buildInfoRow(
+                        context,
+                        'Spending Variance',
+                        _formatLargeNumber(
+                            _toDouble(patterns[MapKeys.stabilityIndex])),
+                      ),
+                      // Removed Essentials Share - will be improved in the future
+                      // when better categorization is available
+                    ],
+                  ),
+                ],
+                // Recurring expenses at the end (expandable)
+                if (recurring.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  _buildExpandableRecurringSection(
+                    context,
+                    recurring,
+                    formatter,
+                  ),
+                ],
               ],
             ),
           ),
-          child: SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .surfaceVariant
-                          .withOpacity(0.5),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .outline
-                            .withOpacity(0.18),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.info_outline,
-                          size: 18,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'This is still experimental, financial score might not be accurate.',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  // Show categorization encouragement banner when coverage is low
-                  if (lowCoverage) ...[
-                    _buildCategorizationBanner(
-                      context,
-                      categorizedCoverage,
-                      transactions,
-                      txProvider,
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                  _buildScoreCard(context, score, lowCoverage: lowCoverage),
-                  const SizedBox(height: 12),
-                  _buildStabilityCard(
-                    context,
-                    _toDouble(patterns[MapKeys.spendVariance]),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildSummaryCard(
-                          context,
-                          'Total Income',
-                          formatter.format(totalIncome),
-                          Icons.trending_up,
-                          Colors.green,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildSummaryCard(
-                          context,
-                          'Total Expense',
-                          formatter.format(totalExpense),
-                          Icons.trending_down,
-                          Colors.red,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  _buildSectionCard(
-                    context,
-                    'Projections',
-                    Icons.auto_graph,
-                    [
-                      _buildInfoRow(
-                        context,
-                        'Projected Income',
-                        formatter.format(
-                          _toDouble(projections['projectedIncome']),
-                        ),
-                      ),
-                      _buildInfoRow(
-                        context,
-                        'Projected Expense',
-                        formatter.format(
-                          _toDouble(projections['projectedExpense']),
-                        ),
-                      ),
-                      _buildInfoRow(
-                        context,
-                        'Projected Savings',
-                        formatter.format(
-                          _toDouble(projections['projectedSavings']),
-                        ),
-                        isHighlight: true,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  _buildSectionCard(
-                    context,
-                    'Budget Tips',
-                    Icons.savings,
-                    [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Text(
-                          budget['tip'] as String,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color:
-                                Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                      // Removed needs/wants targets - will be improved in the future
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  _buildSectionCard(
-                    context,
-                    'Unusual Expenses',
-                    Icons.warning_amber_rounded,
-                    anomalies.isEmpty
-                        ? [
-                            Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              child: Text(
-                                'No unusual expenses detected. Your spending is consistent.',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                          ]
-                        : anomalies.take(5).map((t) {
-                            return _buildInfoRow(
-                              context,
-                              '${_bankLabel(t.bankId)} • ${_dateLabel(t.time)}',
-                              formatter.format(t.amount),
-                              isHighlight: true,
-                            );
-                          }).toList(),
-                  ),
-                  if (incomeAnomalies.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    _buildSectionCard(
-                      context,
-                      'Unusual Income',
-                      Icons.trending_up,
-                      incomeAnomalies.take(5).map((t) {
-                        return _buildInfoRow(
-                          context,
-                          '${_bankLabel(t.bankId)} • ${_dateLabel(t.time)}',
-                          formatter.format(t.amount),
-                          isHighlight: true,
-                        );
-                      }).toList(),
-                    ),
-                  ],
-                  if (patterns['spendVariance'] != null) ...[
-                    const SizedBox(height: 16),
-                    _buildSectionCard(
-                      context,
-                      'Spending Patterns',
-                      Icons.insights,
-                      [
-                        ...(patterns[MapKeys.byCategory]
-                                as Map<String, dynamic>)
-                            .entries
-                            .map(
-                          (entry) {
-                            final label = entry.key;
-                            final value = _toDouble(entry.value);
-                            String suffix = '';
-
-                            // Show percentage of total expenses for debit-like categories.
-                            if (totalExpense > 0 && label != 'CREDIT') {
-                              final pct = (value / totalExpense) * 100;
-                              suffix = ' (${pct.toStringAsFixed(1)}%)';
-                            }
-
-                            return _buildInfoRow(
-                              context,
-                              label,
-                              '${formatter.format(value)}$suffix',
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        const Divider(),
-                        const SizedBox(height: 12),
-                        _buildInfoRow(
-                          context,
-                          'Spending Variance',
-                          _formatLargeNumber(
-                              _toDouble(patterns[MapKeys.stabilityIndex])),
-                        ),
-                        // Removed Essentials Share - will be improved in the future
-                        // when better categorization is available
-                      ],
-                    ),
-                  ],
-                  // Recurring expenses at the end (expandable)
-                  if (recurring.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    _buildExpandableRecurringSection(
-                      context,
-                      recurring,
-                      formatter,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
         ),
-      );
-    } catch (e, stackTrace) {
-      // Log error for debugging
-      print('[INSIGHTS_PAGE_ERROR] Error building insights page: $e');
-      print('[INSIGHTS_PAGE_ERROR] Stack trace: $stackTrace');
-      List<String> json = [];
-      json.add("insights values: {");
-      for (var element in insights.entries) {
-        json.add("....${element.key}': ${element.value}");
-      }
-      json.add("}");
-      // Show error UI instead of grey screen
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Financial Insights'),
-        ),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.error_outline,
-                    size: 64,
-                    color: Theme.of(context).colorScheme.error,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Error loading insights',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Error: $e',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () {
-                      // Try to rebuild
-                      Navigator.of(context).pop();
-                    },
-                    child: const Text('Go Back'),
-                  ),
-                  const SizedBox(height: 16),
-                  ...json.map(
-                    (j) => SizedBox(
-                      width: double.infinity,
-                      child: SingleChildScrollView(
-                        child: Text(
-                          j,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    }
+      ),
+    );
   }
 
   String _bankLabel(int? bankId) {

@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:totals/models/category.dart';
 
+import '../data/consts.dart';
 import '../models/transaction.dart';
 import '../utils/map_keys.dart';
 import '../utils/math_utils.dart';
@@ -394,13 +395,91 @@ class InsightsService {
     return byRef.entries
         .where((exp) => exp.value.length >= 3)
         .map(
-          (exp) => {
-            'label': exp.key,
-            'count': exp.value.length,
-            'avg': MathUtils.findTransactionSum(exp.value) / exp.value.length,
+          (exp) {
+            // Calculate average using absolute values since these are expenses
+            final total = exp.value.fold<double>(
+              0.0,
+              (sum, tx) => sum + tx.amount.abs(),
+            );
+            final avg = total / exp.value.length;
+            return {
+              'label': _generateRecurringLabel(exp.value),
+              'count': exp.value.length,
+              'avg': avg,
+            };
           },
         )
         .toList();
+  }
+
+  /// Generates a user-friendly label for recurring expenses.
+  /// Prioritizes: creditor/receiver > category name > bank name > reference prefix
+  String _generateRecurringLabel(List<Transaction> transactions) {
+    // Try to find the most common creditor/receiver across transactions
+    final creditorCounts = <String, int>{};
+    final receiverCounts = <String, int>{};
+    final categoryCounts = <String, int>{};
+    
+    for (final tx in transactions) {
+      if (tx.creditor != null && tx.creditor!.trim().isNotEmpty) {
+        creditorCounts[tx.creditor!.trim()] = 
+            (creditorCounts[tx.creditor!.trim()] ?? 0) + 1;
+      }
+      if (tx.receiver != null && tx.receiver!.trim().isNotEmpty) {
+        receiverCounts[tx.receiver!.trim()] = 
+            (receiverCounts[tx.receiver!.trim()] ?? 0) + 1;
+      }
+      if (tx.categoryId != null && _getCategoryById != null) {
+        final category = _getCategoryById(tx.categoryId);
+        if (category != null && category.name.trim().isNotEmpty) {
+          categoryCounts[category.name] = 
+              (categoryCounts[category.name] ?? 0) + 1;
+        }
+      }
+    }
+    
+    // Find most common creditor
+    if (creditorCounts.isNotEmpty) {
+      final mostCommonCreditor = creditorCounts.entries
+          .reduce((a, b) => a.value > b.value ? a : b);
+      // Only use if it appears in majority of transactions (>= 50%)
+      if (mostCommonCreditor.value >= transactions.length * 0.5) {
+        return mostCommonCreditor.key;
+      }
+    }
+    
+    // Find most common receiver
+    if (receiverCounts.isNotEmpty) {
+      final mostCommonReceiver = receiverCounts.entries
+          .reduce((a, b) => a.value > b.value ? a : b);
+      // Only use if it appears in majority of transactions (>= 50%)
+      if (mostCommonReceiver.value >= transactions.length * 0.5) {
+        return mostCommonReceiver.key;
+      }
+    }
+    
+    // Find most common category
+    if (categoryCounts.isNotEmpty) {
+      final mostCommonCategory = categoryCounts.entries
+          .reduce((a, b) => a.value > b.value ? a : b);
+      // Only use if it appears in majority of transactions (>= 50%)
+      if (mostCommonCategory.value >= transactions.length * 0.5) {
+        return mostCommonCategory.key;
+      }
+    }
+    
+    // Fallback to bank name if available
+    if (transactions.isNotEmpty && transactions.first.bankId != null) {
+      for (final bank in AppConstants.banks) {
+        if (bank.id == transactions.first.bankId) {
+          return bank.shortName;
+        }
+      }
+    }
+    
+    // Last resort: use reference prefix (original behavior)
+    final refPrefix = (transactions.first.reference ?? '').split('-').first;
+    return refPrefix.isEmpty ? 'Recurring Expense' : refPrefix;
   }
 
   double _savingsRate(double income, double expense) {
