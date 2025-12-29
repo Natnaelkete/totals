@@ -17,6 +17,7 @@ import 'package:totals/widgets/custom_bottom_nav.dart';
 import 'package:totals/widgets/detected_banks_widget.dart';
 import 'package:totals/screens/failed_parses_page.dart';
 import 'package:totals/screens/analytics_page.dart';
+import 'package:totals/screens/budget_page.dart';
 import 'package:totals/screens/web_page.dart';
 import 'package:totals/screens/settings_page.dart';
 import 'package:totals/services/notification_service.dart';
@@ -55,7 +56,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool showTotalBalance = false;
   List<String> visibleTotalBalancesForSubCards = [];
   int activeTab = 0;
-  int _bottomNavIndex = 0;
+  int _bottomNavIndex = 2; // Home is now at index 2 (center)
   StreamSubscription<NotificationIntent>? _notificationIntentSub;
   String? _pendingNotificationReference;
   String? _highlightedReference;
@@ -191,11 +192,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }) async {
     if (!mounted) return;
 
-    if (_bottomNavIndex != 0) {
+    if (_bottomNavIndex != 2) { // Home is now at index 2
       setState(() {
-        _bottomNavIndex = 0;
+        _bottomNavIndex = 2; // Home is now at index 2
       });
-      _mainPageController.jumpToPage(0);
+      _mainPageController.jumpToPage(2);
     }
 
     changeTab(HomeTabs.recentTabId);
@@ -1101,6 +1102,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       controller: _mainPageController,
       physics: const NeverScrollableScrollPhysics(),
       children: [
+        const AnalyticsPage(), // index 0
+        const BudgetPage(), // index 1
         Consumer<TransactionProvider>(
           builder: (context, provider, child) {
             return Scaffold(
@@ -1109,10 +1112,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               body: _buildHomeContent(provider),
             );
           },
-        ),
-        const AnalyticsPage(),
-        const WebPage(),
-        const SettingsPage(),
+        ), // index 2 - Home
+        const WebPage(), // index 3
+        const SettingsPage(), // index 4
       ],
     );
   }

@@ -20,7 +20,7 @@ class DatabaseHelper {
 
     final db = await openDatabase(
       path,
-      version: 13,
+      version: 14,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
@@ -145,6 +145,24 @@ class DatabaseHelper {
       )
     ''');
 
+    // Budgets table
+    await db.execute('''
+      CREATE TABLE budgets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        amount REAL NOT NULL,
+        categoryId INTEGER,
+        startDate TEXT NOT NULL,
+        endDate TEXT,
+        rollover INTEGER NOT NULL DEFAULT 0,
+        alertThreshold REAL NOT NULL DEFAULT 80.0,
+        isActive INTEGER NOT NULL DEFAULT 1,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT
+      )
+    ''');
+
     // Create indexes for better query performance
     await db.execute(
         'CREATE INDEX idx_transactions_reference ON transactions(reference)');
@@ -167,6 +185,14 @@ class DatabaseHelper {
     await db.execute('CREATE INDEX idx_accounts_bank ON accounts(bank)');
     await db.execute(
         'CREATE INDEX idx_accounts_accountNumber ON accounts(accountNumber)');
+    await db.execute(
+        'CREATE INDEX idx_budgets_type ON budgets(type)');
+    await db.execute(
+        'CREATE INDEX idx_budgets_categoryId ON budgets(categoryId)');
+    await db.execute(
+        'CREATE INDEX idx_budgets_isActive ON budgets(isActive)');
+    await db.execute(
+        'CREATE INDEX idx_budgets_startDate ON budgets(startDate)');
 
     await _seedBuiltInCategories(db);
   }
@@ -413,6 +439,39 @@ class DatabaseHelper {
         print("debug: Added colors column to banks table");
       } catch (e) {
         print("debug: Error adding colors column (might already exist): $e");
+      }
+    }
+
+    if (oldVersion < 14) {
+      // Add budgets table for version 14
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS budgets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            type TEXT NOT NULL,
+            amount REAL NOT NULL,
+            categoryId INTEGER,
+            startDate TEXT NOT NULL,
+            endDate TEXT,
+            rollover INTEGER NOT NULL DEFAULT 0,
+            alertThreshold REAL NOT NULL DEFAULT 80.0,
+            isActive INTEGER NOT NULL DEFAULT 1,
+            createdAt TEXT NOT NULL,
+            updatedAt TEXT
+          )
+        ''');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_budgets_type ON budgets(type)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_budgets_categoryId ON budgets(categoryId)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_budgets_isActive ON budgets(isActive)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_budgets_startDate ON budgets(startDate)');
+        print("debug: Added budgets table");
+      } catch (e) {
+        print("debug: Error adding budgets table (might already exist): $e");
       }
     }
   }

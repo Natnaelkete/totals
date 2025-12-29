@@ -14,8 +14,9 @@ class CustomBottomNavModern extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tabs = [
-      {'icon': Icons.home_outlined, 'filledIcon': Icons.home, 'label': 'Home'},
       {'icon': Icons.analytics_outlined, 'filledIcon': Icons.analytics, 'label': 'Analytics'},
+      {'icon': Icons.account_balance_wallet_outlined, 'filledIcon': Icons.account_balance_wallet, 'label': 'Budget'},
+      {'icon': Icons.home_outlined, 'filledIcon': Icons.home, 'label': 'Home'},
       {'icon': Icons.web_outlined, 'filledIcon': Icons.web, 'label': 'Web'},
       {'icon': Icons.settings_outlined, 'filledIcon': Icons.settings, 'label': 'Settings'},
     ];
@@ -23,6 +24,7 @@ class CustomBottomNavModern extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primaryColor = Theme.of(context).colorScheme.primary;
     final iconColor = isDark ? Colors.white70 : Colors.black54;
+    const homeIndex = 2; // Home is in the center
 
     // --- Floating Pill Glassmorphism Container ---
     return Padding(
@@ -41,7 +43,7 @@ class CustomBottomNavModern extends StatelessWidget {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.2), // Increased opacity for shadow prominence
+                  color: Colors.black.withOpacity(0.2),
                   blurRadius: 25,
                   offset: const Offset(0, 5),
                   spreadRadius: 3,
@@ -52,13 +54,51 @@ class CustomBottomNavModern extends StatelessWidget {
               bottom: false,
               child: Container(
                 height: 64,
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8), // Reduced internal padding
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: List.generate(tabs.length, (index) {
                     final isActive = currentIndex == index;
                     final tab = tabs[index];
+                    final isHome = index == homeIndex;
 
+                    if (isHome) {
+                      // Special centered home button - larger and elevated
+                      return GestureDetector(
+                        onTap: () => onTap(index),
+                        behavior: HitTestBehavior.opaque,
+                        child: Container(
+                          width: 64,
+                          height: 64,
+                          margin: const EdgeInsets.only(bottom: 8),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isActive
+                                ? primaryColor
+                                : Theme.of(context).colorScheme.surfaceVariant,
+                            boxShadow: [
+                              BoxShadow(
+                                color: isActive
+                                    ? primaryColor.withOpacity(0.4)
+                                    : Colors.black.withOpacity(0.2),
+                                blurRadius: 15,
+                                offset: const Offset(0, 4),
+                                spreadRadius: 2,
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            isActive ? tab['filledIcon'] as IconData : tab['icon'] as IconData,
+                            size: 28,
+                            color: isActive
+                                ? Colors.white
+                                : iconColor,
+                          ),
+                        ),
+                      );
+                    }
+
+                    // Regular nav items
                     return Flexible(
                       flex: isActive ? 2 : 1,
                       child: GestureDetector(
