@@ -1,5 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:totals/models/category.dart' as models;
 
 class DatabaseHelper {
@@ -20,7 +21,7 @@ class DatabaseHelper {
 
     final db = await openDatabase(
       path,
-      version: 13,
+      version: 15,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
@@ -413,6 +414,104 @@ class DatabaseHelper {
         print("debug: Added colors column to banks table");
       } catch (e) {
         print("debug: Error adding colors column (might already exist): $e");
+      }
+    }
+
+    if (oldVersion < 14) {
+      // Add receiver category mappings table for version 14
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS receiver_category_mappings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            accountNumber TEXT NOT NULL,
+            categoryId INTEGER NOT NULL,
+            accountType TEXT NOT NULL,
+            createdAt TEXT NOT NULL,
+            UNIQUE(accountNumber, accountType)
+          )
+        ''');
+        await db.execute(
+          "CREATE INDEX IF NOT EXISTS idx_receiver_mappings_accountNumber ON receiver_category_mappings(accountNumber)",
+        );
+        await db.execute(
+          "CREATE INDEX IF NOT EXISTS idx_receiver_mappings_categoryId ON receiver_category_mappings(categoryId)",
+        );
+        print("debug: Added receiver_category_mappings table");
+      } catch (e) {
+        print("debug: Error adding receiver_category_mappings table (might already exist): $e");
+      }
+    }
+
+    if (oldVersion < 15) {
+      // Add profileId columns to accounts and transactions tables for version 15
+      try {
+        // Add profileId to accounts table
+        await db.execute('ALTER TABLE accounts ADD COLUMN profileId INTEGER');
+        print("debug: Added profileId column to accounts table");
+        
+        // Add profileId to transactions table
+        await db.execute('ALTER TABLE transactions ADD COLUMN profileId INTEGER');
+        print("debug: Added profileId column to transactions table");
+        
+        // Create indexes for better query performance
+        await db.execute(
+          "CREATE INDEX IF NOT EXISTS idx_accounts_profileId ON accounts(profileId)",
+        );
+        await db.execute(
+          "CREATE INDEX IF NOT EXISTS idx_transactions_profileId ON transactions(profileId)",
+        );
+        print("debug: Created indexes for profileId columns");
+        
+        // Migrate existing data: assign all existing accounts/transactions to active profile
+        // Get active profile ID (or first profile if none active)
+        // Access SharedPreferences directly to avoid circular dependency during migration
+        final prefs = await SharedPreferences.getInstance();
+        int? activeProfileId = prefs.getInt('active_profile_id');
+        
+        if (activeProfileId == null) {
+          // Get first profile from database
+          final profileResult = await db.query(
+            'profiles',
+            orderBy: 'createdAt ASC',
+            limit: 1,
+          );
+          
+          if (profileResult.isNotEmpty) {
+            activeProfileId = profileResult.first['id'] as int?;
+            if (activeProfileId != null) {
+              await prefs.setInt('active_profile_id', activeProfileId);
+            }
+          } else {
+            // Create default profile
+            final defaultProfileId = await db.insert(
+              'profiles',
+              {
+                'name': 'Personal',
+                'createdAt': DateTime.now().toIso8601String(),
+              },
+            );
+            activeProfileId = defaultProfileId;
+            await prefs.setInt('active_profile_id', activeProfileId);
+          }
+        }
+        
+        // Update all existing accounts to use active profile
+        await db.update(
+          'accounts',
+          {'profileId': activeProfileId},
+          where: 'profileId IS NULL',
+        );
+        print("debug: Migrated existing accounts to profile $activeProfileId");
+        
+        // Update all existing transactions to use active profile
+        await db.update(
+          'transactions',
+          {'profileId': activeProfileId},
+          where: 'profileId IS NULL',
+        );
+        print("debug: Migrated existing transactions to profile $activeProfileId");
+      } catch (e) {
+        print("debug: Error adding profileId columns (might already exist): $e");
       }
     }
   }
