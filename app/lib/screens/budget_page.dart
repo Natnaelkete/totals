@@ -7,6 +7,7 @@ import 'package:totals/widgets/budget/budget_alert_banner.dart';
 import 'package:totals/widgets/budget/budget_period_selector.dart';
 import 'package:totals/widgets/budget/category_budget_list.dart';
 import 'package:totals/widgets/budget/budget_form_sheet.dart';
+import 'package:totals/widgets/budget/category_budget_form_sheet.dart';
 import 'package:totals/services/budget_service.dart';
 import 'package:totals/models/budget.dart';
 
@@ -59,23 +60,13 @@ class _BudgetPageState extends State<BudgetPage> {
             // App Bar
             Padding(
               padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Budget',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.add),
-                    onPressed: () => _showBudgetForm(),
-                    tooltip: 'Create Budget',
-                  ),
-                ],
+              child: Text(
+                'Budget',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
               ),
             ),
             // View Selector
@@ -223,7 +214,7 @@ class _BudgetPageState extends State<BudgetPage> {
                       ),
                     ),
                     TextButton.icon(
-                      onPressed: () => _showBudgetForm(type: 'category'),
+                      onPressed: () => _showCategoryBudgetForm(),
                       icon: const Icon(Icons.add),
                       label: const Text('Add Category Budget'),
                     ),
@@ -231,13 +222,27 @@ class _BudgetPageState extends State<BudgetPage> {
                 ),
               ),
               CategoryBudgetList(
-                onBudgetTap: (budget) => _showBudgetForm(budget: budget),
+                onBudgetTap: (budget) => _showCategoryBudgetForm(budget: budget),
               ),
             ],
           ),
         );
       },
     );
+  }
+
+  void _showCategoryBudgetForm({Budget? budget}) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => CategoryBudgetFormSheet(
+        budget: budget,
+      ),
+    ).then((_) {
+      final provider = Provider.of<BudgetProvider>(context, listen: false);
+      provider.loadBudgets();
+    });
   }
 
   Widget _buildEmptyState(String title, String subtitle, VoidCallback onAdd) {
