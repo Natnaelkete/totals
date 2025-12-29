@@ -173,7 +173,7 @@ class _BottomNavItem extends StatelessWidget {
   Widget build(BuildContext context) {
     const double iconSize = 24.0;
     const Duration duration = Duration(milliseconds: 300);
-    const double textSpacing = 4.0; // Reduced spacing
+    const double textSpacing = 2.0; // Reduced spacing between icon and text
 
     return AnimatedContainer(
       duration: duration,
