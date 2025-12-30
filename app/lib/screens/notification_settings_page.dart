@@ -17,6 +17,7 @@ class NotificationSettingsPage extends StatefulWidget {
 class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   bool _loading = true;
   bool _transactionEnabled = true;
+  bool _budgetEnabled = true;
   bool _dailyEnabled = true;
   TimeOfDay _dailyTime = const TimeOfDay(hour: 20, minute: 0);
   DateTime? _lastDailySummarySentAt;
@@ -30,12 +31,14 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   Future<void> _load() async {
     final settings = NotificationSettingsService.instance;
     final tx = await settings.isTransactionNotificationsEnabled();
+    final budget = await settings.isBudgetAlertsEnabled();
     final daily = await settings.isDailySummaryEnabled();
     final time = await settings.getDailySummaryTime();
     final lastSent = await settings.getDailySummaryLastSentAt();
     if (!mounted) return;
     setState(() {
       _transactionEnabled = tx;
+      _budgetEnabled = budget;
       _dailyEnabled = daily;
       _dailyTime = time;
       _lastDailySummarySentAt = lastSent;
@@ -47,6 +50,11 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
     setState(() => _transactionEnabled = value);
     await NotificationSettingsService.instance
         .setTransactionNotificationsEnabled(value);
+  }
+
+  Future<void> _setBudgetEnabled(bool value) async {
+    setState(() => _budgetEnabled = value);
+    await NotificationSettingsService.instance.setBudgetAlertsEnabled(value);
   }
 
   Future<void> _setDailyEnabled(bool value) async {
@@ -210,6 +218,16 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                     title: const Text('Transaction alerts'),
                     subtitle:
                         const Text('Notify when a new transaction is detected'),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Card(
+                  child: SwitchListTile(
+                    value: _budgetEnabled,
+                    onChanged: _setBudgetEnabled,
+                    title: const Text('Budget alerts'),
+                    subtitle:
+                        const Text('Notify when budget limits are reached'),
                   ),
                 ),
                 const SizedBox(height: 8),

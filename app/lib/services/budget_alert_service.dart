@@ -1,6 +1,7 @@
 import 'package:totals/models/budget.dart';
 import 'package:totals/services/budget_service.dart';
 import 'package:totals/services/notification_service.dart';
+import 'package:totals/services/notification_settings_service.dart';
 
 class BudgetAlertService {
   final BudgetService _budgetService = BudgetService();
@@ -49,6 +50,10 @@ class BudgetAlertService {
 
   // Send notification for budget alerts
   Future<void> sendBudgetAlertNotification(BudgetAlert alert) async {
+    final enabled =
+        await NotificationSettingsService.instance.isBudgetAlertsEnabled();
+    if (!enabled) return;
+
     final title = alert.alertType == BudgetAlertType.exceeded
         ? 'Budget Exceeded'
         : 'Budget Warning';
