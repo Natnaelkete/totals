@@ -1,12 +1,10 @@
 import 'package:totals/models/budget.dart';
 import 'package:totals/services/budget_service.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:totals/services/notification_service.dart';
 
 class BudgetAlertService {
   final BudgetService _budgetService = BudgetService();
-  final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
 
-  static const String _budgetChannelId = 'budgets';
   static const int _budgetNotificationIdBase = 10000;
 
   // Check budgets against current spending and generate alerts
@@ -51,32 +49,17 @@ class BudgetAlertService {
 
   // Send notification for budget alerts
   Future<void> sendBudgetAlertNotification(BudgetAlert alert) async {
-    try {
-      final title = alert.alertType == BudgetAlertType.exceeded
-          ? 'Budget Exceeded'
-          : 'Budget Warning';
+    final title = alert.alertType == BudgetAlertType.exceeded
+        ? 'Budget Exceeded'
+        : 'Budget Warning';
 
-      final id = _budgetNotificationIdBase + (alert.budget.id ?? 0);
+    final id = _budgetNotificationIdBase + (alert.budget.id ?? 0);
 
-      await _plugin.show(
-        id,
-        title,
-        alert.message,
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            _budgetChannelId,
-            'Budget Alerts',
-            channelDescription: 'Notifications for budget warnings and alerts',
-            importance: Importance.defaultImportance,
-            priority: Priority.defaultPriority,
-          ),
-          iOS: DarwinNotificationDetails(),
-        ),
-      );
-    } catch (e) {
-      // Handle notification error silently
-      print('debug: Failed to show budget alert notification: $e');
-    }
+    await NotificationService.instance.showBudgetAlertNotification(
+      id: id,
+      title: title,
+      body: alert.message,
+    );
   }
 
   // Check and send notifications for all budget alerts

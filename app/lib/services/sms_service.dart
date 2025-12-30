@@ -13,6 +13,7 @@ import 'package:totals/models/failed_parse.dart';
 import 'package:totals/repositories/failed_parse_repository.dart';
 import 'package:flutter/widgets.dart';
 import 'package:totals/services/notification_service.dart';
+import 'package:totals/services/budget_alert_service.dart';
 
 enum ParseStatus {
   success,
@@ -453,6 +454,14 @@ class SmsService {
         transaction: newTx,
         bankId: bankId,
       );
+    }
+
+    if (newTx.type == 'DEBIT') {
+      try {
+        await BudgetAlertService().checkAndNotifyBudgetAlerts();
+      } catch (e) {
+        print("debug: Error checking budget alerts after SMS transaction: $e");
+      }
     }
 
     return ParseResult(
