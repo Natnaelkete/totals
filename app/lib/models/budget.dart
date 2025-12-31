@@ -11,6 +11,7 @@ class Budget {
   final bool isActive;
   final DateTime createdAt;
   final DateTime? updatedAt;
+  final String? timeFrame; // 'daily', 'monthly', 'yearly', 'never' - for category budgets
 
   Budget({
     this.id,
@@ -25,6 +26,7 @@ class Budget {
     this.isActive = true,
     required this.createdAt,
     this.updatedAt,
+    this.timeFrame,
   });
 
   factory Budget.fromDb(Map<String, dynamic> row) {
@@ -49,6 +51,7 @@ class Budget {
       updatedAt: row['updatedAt'] != null
           ? DateTime.parse(row['updatedAt'] as String)
           : null,
+      timeFrame: row['timeFrame'] as String?,
     );
   }
 
@@ -66,6 +69,7 @@ class Budget {
       'isActive': isActive ? 1 : 0,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt?.toIso8601String(),
+      'timeFrame': timeFrame,
     };
   }
 
@@ -82,6 +86,7 @@ class Budget {
     bool? isActive,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? timeFrame,
   }) {
     return Budget(
       id: id ?? this.id,
@@ -96,6 +101,7 @@ class Budget {
       isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      timeFrame: timeFrame ?? this.timeFrame,
     );
   }
 
@@ -110,8 +116,25 @@ class Budget {
       case 'yearly':
         return DateTime(now.year, 1, 1);
       case 'category':
-        // For category budgets, use monthly by default
-        return DateTime(now.year, now.month, 1);
+        // For category budgets, use timeFrame if available, otherwise default to monthly
+        final frame = timeFrame ?? 'monthly';
+        switch (frame) {
+          case 'daily':
+            return DateTime(now.year, now.month, now.day);
+          case 'monthly':
+            return DateTime(now.year, now.month, 1);
+          case 'yearly':
+            return DateTime(now.year, 1, 1);
+          case 'never':
+            // For never, use the startDate of the budget
+            return startDate;
+          default:
+            // Handle legacy 'unlimited' value
+            if (frame == 'unlimited') {
+              return startDate;
+            }
+            return DateTime(now.year, now.month, 1);
+        }
       default:
         return DateTime(now.year, now.month, 1);
     }
@@ -128,8 +151,27 @@ class Budget {
       case 'yearly':
         return DateTime(start.year, 12, 31, 23, 59, 59);
       case 'category':
-        final nextMonth = DateTime(start.year, start.month + 1, 1);
-        return nextMonth.subtract(const Duration(seconds: 1));
+        // For category budgets, use timeFrame if available, otherwise default to monthly
+        final frame = timeFrame ?? 'monthly';
+        switch (frame) {
+          case 'daily':
+            return DateTime(start.year, start.month, start.day, 23, 59, 59);
+          case 'monthly':
+            final nextMonth = DateTime(start.year, start.month + 1, 1);
+            return nextMonth.subtract(const Duration(seconds: 1));
+          case 'yearly':
+            return DateTime(start.year, 12, 31, 23, 59, 59);
+          case 'never':
+            // For never, use endDate if set, otherwise return a far future date
+            return endDate ?? DateTime(2100, 12, 31, 23, 59, 59);
+          default:
+            // Handle legacy 'unlimited' value
+            if (frame == 'unlimited') {
+              return endDate ?? DateTime(2100, 12, 31, 23, 59, 59);
+            }
+            final nextMonth = DateTime(start.year, start.month + 1, 1);
+            return nextMonth.subtract(const Duration(seconds: 1));
+        }
       default:
         final nextMonth = DateTime(start.year, start.month + 1, 1);
         return nextMonth.subtract(const Duration(seconds: 1));

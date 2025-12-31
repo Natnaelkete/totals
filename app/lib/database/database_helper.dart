@@ -166,7 +166,8 @@ class DatabaseHelper {
         alertThreshold REAL NOT NULL DEFAULT 80.0,
         isActive INTEGER NOT NULL DEFAULT 1,
         createdAt TEXT NOT NULL,
-        updatedAt TEXT
+        updatedAt TEXT,
+        timeFrame TEXT
       )
     ''');
 
@@ -614,6 +615,16 @@ class DatabaseHelper {
       } catch (e) {
         print(
             "debug: Error adding profileId columns (might already exist): $e");
+      }
+    }
+
+    if (oldVersion < 16) {
+      // Add timeFrame column to budgets table for version 16
+      try {
+        await db.execute('ALTER TABLE budgets ADD COLUMN timeFrame TEXT');
+        print("debug: Added timeFrame column to budgets table");
+      } catch (e) {
+        print("debug: Error adding timeFrame column (might already exist): $e");
       }
     }
   }
