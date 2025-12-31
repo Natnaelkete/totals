@@ -266,43 +266,46 @@ class _ModernCounterpartyGrid extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: Colors.white.withOpacity(0.05)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: color,
-                  shape: BoxShape.circle,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1,
-                  color: Colors.white.withOpacity(0.6),
+                const SizedBox(width: 12),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1,
+                    color: Colors.white.withOpacity(0.6),
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          if (entries.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(left: 20),
-              child: Text(
-                'No data available for this year.',
-                style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 13),
-              ),
-            )
-          else
-            ...entries.asMap().entries.map((e) => _buildEntryRow(e.key, e.value, color)),
-        ],
+              ],
+            ),
+            const SizedBox(height: 20),
+            if (entries.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(left: 20),
+                child: Text(
+                  'No data available for this year.',
+                  style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 13),
+                ),
+              )
+            else
+              ...entries.asMap().entries.map((e) => _buildEntryRow(e.key, e.value, color)),
+          ],
+        ),
       ),
     );
   }

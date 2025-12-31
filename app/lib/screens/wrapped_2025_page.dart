@@ -767,61 +767,64 @@ class _Wrapped2025PageState extends State<Wrapped2025Page> {
                         borderRadius: BorderRadius.circular(32),
                         child: BackdropFilter(
                           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: slide.accent.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(16),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: slide.accent.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: Icon(
+                                    slide.icon,
+                                    color: slide.accent,
+                                    size: 24,
+                                  ),
                                 ),
-                                child: Icon(
-                                  slide.icon,
-                                  color: slide.accent,
-                                  size: 24,
-                                ),
-                              ),
-                              const SizedBox(height: 24),
-                              Text(
-                                slide.value,
-                                style: TextStyle(
-                                  fontSize: 48,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: -2,
-                                  color: slide.accent,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                slide.subtitle,
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  height: 1.5,
-                                  fontWeight: FontWeight.w500,
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                              if (slide.footnote != null) ...[
                                 const SizedBox(height: 24),
-                                Row(
-                                  children: [
-                                    Icon(Icons.tips_and_updates_rounded, size: 14, color: slide.accent.withOpacity(0.5)),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        slide.footnote!,
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontStyle: FontStyle.italic,
-                                          color: theme.colorScheme.onSurfaceVariant.withOpacity(0.6),
+                                Text(
+                                  slide.value,
+                                  style: TextStyle(
+                                    fontSize: 48,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: -2,
+                                    color: slide.accent,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  slide.subtitle,
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    height: 1.5,
+                                    fontWeight: FontWeight.w500,
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                if (slide.footnote != null) ...[
+                                  const SizedBox(height: 24),
+                                  Row(
+                                    children: [
+                                      Icon(Icons.tips_and_updates_rounded, size: 14, color: slide.accent.withOpacity(0.5)),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          slide.footnote!,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontStyle: FontStyle.italic,
+                                            color: theme.colorScheme.onSurfaceVariant.withOpacity(0.6),
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  ],
-                                ),
+                                    ],
+                                  ),
+                                ],
                               ],
-                            ],
+                            ),
                           ),
                         ),
                       ),
