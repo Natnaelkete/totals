@@ -7,6 +7,7 @@ import 'package:totals/repositories/account_repository.dart';
 import 'package:totals/repositories/category_repository.dart';
 import 'package:totals/repositories/transaction_repository.dart';
 import 'package:totals/services/bank_config_service.dart';
+import 'package:totals/services/budget_alert_service.dart';
 import 'package:totals/services/receiver_category_service.dart';
 import 'package:totals/services/notification_settings_service.dart';
 
@@ -15,6 +16,7 @@ class TransactionProvider with ChangeNotifier {
   final AccountRepository _accountRepo = AccountRepository();
   final CategoryRepository _categoryRepo = CategoryRepository();
   final BankConfigService _bankConfigService = BankConfigService();
+  final BudgetAlertService _budgetAlertService = BudgetAlertService();
 
   List<Transaction> _transactions = [];
   List<Account> _accounts = [];
@@ -315,6 +317,14 @@ class TransactionProvider with ChangeNotifier {
     // This logic was in onBackgroundMessage, we should probably centralize it here or in a Service
     // For now, simpler to just reload everything
     await loadData();
+    // Check budget alerts after adding transaction (only for DEBIT transactions)
+    if (t.type == 'DEBIT') {
+      try {
+        await _budgetAlertService.checkAndNotifyBudgetAlerts();
+      } catch (e) {
+        print("debug: Error checking budget alerts after transaction: $e");
+      }
+    }
   }
 
   Future<void> setCategoryForTransaction(
@@ -349,6 +359,16 @@ class TransactionProvider with ChangeNotifier {
     }
 
     await loadData();
+    // Check budget alerts after categorizing transaction (only for DEBIT transactions)
+    // Only check budgets for the specific category that was selected
+    if (transaction.type == 'DEBIT' && category.id != null) {
+      try {
+        await _budgetAlertService
+            .checkAndNotifyBudgetAlertsForCategory(category.id!);
+      } catch (e) {
+        print("debug: Error checking budget alerts after categorizing: $e");
+      }
+    }
   }
 
   Future<void> clearCategoryForTransaction(Transaction transaction) async {
@@ -416,8 +436,8 @@ class TransactionProvider with ChangeNotifier {
     final batch = <Transaction>[];
 
     for (final transaction in uncategorizedTransactions) {
-      final categoryId = await ReceiverCategoryService.instance
-          .getCategoryForTransaction(
+      final categoryId =
+          await ReceiverCategoryService.instance.getCategoryForTransaction(
         receiver: transaction.receiver,
         creditor: transaction.creditor,
       );

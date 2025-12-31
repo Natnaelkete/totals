@@ -149,6 +149,24 @@ class DatabaseHelper {
       )
     ''');
 
+    // Budgets table
+    await db.execute('''
+      CREATE TABLE budgets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        amount REAL NOT NULL,
+        categoryId INTEGER,
+        startDate TEXT NOT NULL,
+        endDate TEXT,
+        rollover INTEGER NOT NULL DEFAULT 0,
+        alertThreshold REAL NOT NULL DEFAULT 80.0,
+        isActive INTEGER NOT NULL DEFAULT 1,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT
+      )
+    ''');
+
     // Receiver category mappings table
     await db.execute('''
       CREATE TABLE receiver_category_mappings (
@@ -189,8 +207,14 @@ class DatabaseHelper {
     await db.execute('CREATE INDEX idx_accounts_bank ON accounts(bank)');
     await db.execute(
         'CREATE INDEX idx_accounts_accountNumber ON accounts(accountNumber)');
-    await db.execute(
-        'CREATE INDEX idx_accounts_profileId ON accounts(profileId)');
+    await db.execute('CREATE INDEX idx_budgets_type ON budgets(type)');
+    await db
+        .execute('CREATE INDEX idx_budgets_categoryId ON budgets(categoryId)');
+    await db.execute('CREATE INDEX idx_budgets_isActive ON budgets(isActive)');
+    await db
+        .execute('CREATE INDEX idx_budgets_startDate ON budgets(startDate)');
+    await db
+        .execute('CREATE INDEX idx_accounts_profileId ON accounts(profileId)');
     await db.execute(
         'CREATE INDEX idx_transactions_profileId ON transactions(profileId)');
 
@@ -443,6 +467,37 @@ class DatabaseHelper {
     }
 
     if (oldVersion < 14) {
+      // Add budgets table for version 14
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS budgets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            type TEXT NOT NULL,
+            amount REAL NOT NULL,
+            categoryId INTEGER,
+            startDate TEXT NOT NULL,
+            endDate TEXT,
+            rollover INTEGER NOT NULL DEFAULT 0,
+            alertThreshold REAL NOT NULL DEFAULT 80.0,
+            isActive INTEGER NOT NULL DEFAULT 1,
+            createdAt TEXT NOT NULL,
+            updatedAt TEXT
+          )
+        ''');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_budgets_type ON budgets(type)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_budgets_categoryId ON budgets(categoryId)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_budgets_isActive ON budgets(isActive)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_budgets_startDate ON budgets(startDate)');
+        print("debug: Added budgets table");
+      } catch (e) {
+        print("debug: Error adding budgets table (might already exist): $e");
+      }
+
       // Add receiver category mappings table for version 14
       try {
         await db.execute('''
@@ -463,7 +518,8 @@ class DatabaseHelper {
         );
         print("debug: Added receiver_category_mappings table");
       } catch (e) {
-        print("debug: Error adding receiver_category_mappings table (might already exist): $e");
+        print(
+            "debug: Error adding receiver_category_mappings table (might already exist): $e");
       }
     }
 
@@ -473,11 +529,12 @@ class DatabaseHelper {
         // Add profileId to accounts table
         await db.execute('ALTER TABLE accounts ADD COLUMN profileId INTEGER');
         print("debug: Added profileId column to accounts table");
-        
+
         // Add profileId to transactions table
-        await db.execute('ALTER TABLE transactions ADD COLUMN profileId INTEGER');
+        await db
+            .execute('ALTER TABLE transactions ADD COLUMN profileId INTEGER');
         print("debug: Added profileId column to transactions table");
-        
+
         // Create indexes for better query performance
         await db.execute(
           "CREATE INDEX IF NOT EXISTS idx_accounts_profileId ON accounts(profileId)",
@@ -486,13 +543,13 @@ class DatabaseHelper {
           "CREATE INDEX IF NOT EXISTS idx_transactions_profileId ON transactions(profileId)",
         );
         print("debug: Created indexes for profileId columns");
-        
+
         // Migrate existing data: assign all existing accounts/transactions to active profile
         // Get active profile ID (or first profile if none active)
         // Access SharedPreferences directly to avoid circular dependency during migration
         final prefs = await SharedPreferences.getInstance();
         int? activeProfileId = prefs.getInt('active_profile_id');
-        
+
         if (activeProfileId == null) {
           // Get first profile from database
           final profileResult = await db.query(
@@ -500,7 +557,7 @@ class DatabaseHelper {
             orderBy: 'createdAt ASC',
             limit: 1,
           );
-          
+
           if (profileResult.isNotEmpty) {
             activeProfileId = profileResult.first['id'] as int?;
             if (activeProfileId != null) {
@@ -519,7 +576,7 @@ class DatabaseHelper {
             await prefs.setInt('active_profile_id', activeProfileId);
           }
         }
-        
+
         // Update all existing accounts to use active profile
         await db.update(
           'accounts',
@@ -527,16 +584,18 @@ class DatabaseHelper {
           where: 'profileId IS NULL',
         );
         print("debug: Migrated existing accounts to profile $activeProfileId");
-        
+
         // Update all existing transactions to use active profile
         await db.update(
           'transactions',
           {'profileId': activeProfileId},
           where: 'profileId IS NULL',
         );
-        print("debug: Migrated existing transactions to profile $activeProfileId");
+        print(
+            "debug: Migrated existing transactions to profile $activeProfileId");
       } catch (e) {
-        print("debug: Error adding profileId columns (might already exist): $e");
+        print(
+            "debug: Error adding profileId columns (might already exist): $e");
       }
     }
   }

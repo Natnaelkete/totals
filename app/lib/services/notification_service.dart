@@ -15,6 +15,7 @@ class NotificationService {
   static const String _transactionChannelId = 'transactions';
   static const String _dailySpendingChannelId = 'daily_spending';
   static const String _accountSyncChannelId = 'account_sync';
+  static const String _budgetChannelId = 'budgets';
   static const int dailySpendingNotificationId = 9001;
   static const int dailySpendingTestNotificationId = 9002;
 
@@ -61,6 +62,14 @@ class NotificationService {
         'Account sync',
         description: 'Background sync of account transactions',
         importance: Importance.low,
+      ),
+    );
+    await androidPlugin?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        _budgetChannelId,
+        'Budget Alerts',
+        description: 'Notifications for budget warnings and alerts',
+        importance: Importance.defaultImportance,
       ),
     );
 
@@ -329,6 +338,36 @@ class NotificationService {
     } catch (e) {
       if (kDebugMode) {
         print('debug: Failed to show account sync completion: $e');
+      }
+    }
+  }
+
+  Future<void> showBudgetAlertNotification({
+    required int id,
+    required String title,
+    required String body,
+  }) async {
+    try {
+      await ensureInitialized();
+
+      await _plugin.show(
+        id,
+        title,
+        body,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            _budgetChannelId,
+            'Budget Alerts',
+            channelDescription: 'Notifications for budget warnings and alerts',
+            importance: Importance.defaultImportance,
+            priority: Priority.defaultPriority,
+          ),
+          iOS: DarwinNotificationDetails(),
+        ),
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        print('debug: Failed to show budget alert notification: $e');
       }
     }
   }

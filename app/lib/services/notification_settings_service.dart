@@ -8,6 +8,7 @@ class NotificationSettingsService {
       NotificationSettingsService._();
 
   static const _kTransactionEnabled = 'notifications_transaction_enabled';
+  static const _kBudgetEnabled = 'notifications_budget_enabled';
   static const _kDailyEnabled = 'notifications_daily_enabled';
   static const _kDailyHour = 'notifications_daily_hour';
   static const _kDailyMinute = 'notifications_daily_minute';
@@ -22,6 +23,16 @@ class NotificationSettingsService {
   Future<void> setTransactionNotificationsEnabled(bool enabled) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kTransactionEnabled, enabled);
+  }
+
+  Future<bool> isBudgetAlertsEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_kBudgetEnabled) ?? true;
+  }
+
+  Future<void> setBudgetAlertsEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kBudgetEnabled, enabled);
   }
 
   Future<bool> isDailySummaryEnabled() async {

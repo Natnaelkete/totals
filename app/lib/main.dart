@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:totals/providers/insights_provider.dart';
 import 'package:totals/providers/theme_provider.dart';
 import 'package:totals/providers/transaction_provider.dart';
+import 'package:totals/providers/budget_provider.dart';
 import 'package:totals/screens/home_page.dart';
 import 'package:totals/database/migration_helper.dart';
 import 'package:totals/services/account_sync_status_service.dart';
@@ -50,6 +51,7 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => TransactionProvider()),
+        ChangeNotifierProvider(create: (_) => BudgetProvider()),
 
         // we need insights provider to use the existing transacton provider instead of using
         // a new transaction provider instance.
