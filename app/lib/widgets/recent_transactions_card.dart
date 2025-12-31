@@ -200,7 +200,10 @@ class RecentTransactionsCard extends StatelessWidget {
           ? sender
           : (receiver != null && receiver.isNotEmpty ? receiver : null);
       if (counterparty != null && counterparty.isNotEmpty) {
-        return 'from $counterparty';
+        final label = tx.bankId == 6
+            ? formatTelebirrSenderName(counterparty)
+            : counterparty;
+        return 'from $label';
       }
     } else {
       final counterparty = (receiver != null && receiver.isNotEmpty)

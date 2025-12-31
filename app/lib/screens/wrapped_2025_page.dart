@@ -18,61 +18,17 @@ class Wrapped2025Page extends StatefulWidget {
 
 class _Wrapped2025PageState extends State<Wrapped2025Page> {
   static const int _wrappedYear = 2025;
-  static const List<String> _introSteps = [
-    'Scanning your transactions',
-    'Finding your highlights',
-    'Packaging your recap',
-  ];
 
   final PageController _pageController = PageController();
   final BankConfigService _bankConfigService = BankConfigService();
 
-  Timer? _introStepTimer;
-  Timer? _introDismissTimer;
   List<Bank> _banks = [];
   int _currentPage = 0;
-  bool _showIntro = true;
-  int _introStep = 0;
 
   @override
   void initState() {
     super.initState();
     _loadBanks();
-    _startIntroSequence();
-  }
-
-  void _startIntroSequence() {
-    _introStepTimer?.cancel();
-    _introDismissTimer?.cancel();
-    _introStep = 0;
-    _showIntro = true;
-
-    _introStepTimer = Timer.periodic(
-      const Duration(milliseconds: 700),
-      (timer) {
-        if (!mounted) return;
-        setState(() {
-          _introStep = (_introStep + 1) % _introSteps.length;
-        });
-      },
-    );
-
-    _introDismissTimer = Timer(
-      const Duration(milliseconds: 2200),
-      () {
-        if (!mounted) return;
-        _dismissIntro();
-      },
-    );
-  }
-
-  void _dismissIntro() {
-    _introStepTimer?.cancel();
-    _introDismissTimer?.cancel();
-    if (!_showIntro) return;
-    setState(() {
-      _showIntro = false;
-    });
   }
 
   Future<void> _loadBanks() async {
@@ -90,8 +46,6 @@ class _Wrapped2025PageState extends State<Wrapped2025Page> {
 
   @override
   void dispose() {
-    _introStepTimer?.cancel();
-    _introDismissTimer?.cancel();
     _pageController.dispose();
     super.dispose();
   }
@@ -148,6 +102,10 @@ class _Wrapped2025PageState extends State<Wrapped2025Page> {
     final categorySpend = <int?, double>{};
     final sentTotals = <String, double>{};
     final receivedTotals = <String, double>{};
+    double totalServiceCharge = 0.0;
+    double totalVat = 0.0;
+    int feeTransactionCount = 0;
+    final feesByBank = <String, _FeeBreakdown>{};
 
     Transaction? biggest;
     double biggestAmount = 0.0;
@@ -161,6 +119,22 @@ class _Wrapped2025PageState extends State<Wrapped2025Page> {
         income.add(transaction);
       } else {
         expenses.add(transaction);
+      }
+
+      final serviceCharge = transaction.serviceCharge ?? 0.0;
+      final vat = transaction.vat ?? 0.0;
+      final feeTotal = serviceCharge + vat;
+      if (feeTotal > 0) {
+        totalServiceCharge += serviceCharge;
+        totalVat += vat;
+        feeTransactionCount++;
+        final bankLabel = _bankLabelForTransaction(transaction, banksById);
+        final current = feesByBank[bankLabel] ??
+            const _FeeBreakdown(serviceCharge: 0.0, vat: 0.0);
+        feesByBank[bankLabel] = _FeeBreakdown(
+          serviceCharge: current.serviceCharge + serviceCharge,
+          vat: current.vat + vat,
+        );
       }
 
       activeDays.add(DateTime(date.year, date.month, date.day));
@@ -204,14 +178,22 @@ class _Wrapped2025PageState extends State<Wrapped2025Page> {
         }
       } else {
         final amount = transaction.amount.abs();
-        final sender = _cleanCounterparty(transaction.creditor) ??
+        final rawSender = _cleanCounterparty(transaction.creditor) ??
             _cleanCounterparty(transaction.receiver);
-        if (sender != null) {
-          receivedTotals.update(
-            sender,
-            (value) => value + amount,
-            ifAbsent: () => amount,
-          );
+        if (rawSender != null) {
+          if (transaction.bankId == 6 &&
+              !_telebirrSenderHasPhone(rawSender)) {
+            // Skip likely bank-to-telebirr transfers without sender phone info.
+          } else {
+            final sender = transaction.bankId == 6
+                ? formatTelebirrSenderName(rawSender)
+                : rawSender;
+            receivedTotals.update(
+              sender,
+              (value) => value + amount,
+              ifAbsent: () => amount,
+            );
+          }
         }
       }
 
@@ -306,6 +288,10 @@ class _Wrapped2025PageState extends State<Wrapped2025Page> {
       totalIncome: totalIncome,
       totalExpense: totalExpense,
       netFlow: netFlow,
+      totalServiceCharge: totalServiceCharge,
+      totalVat: totalVat,
+      feeTransactionCount: feeTransactionCount,
+      feesByBank: feesByBank,
       topCategory: _CategoryHighlight(
         label: topCategoryLabel,
         amount: topCategoryAmount,
@@ -351,6 +337,22 @@ class _Wrapped2025PageState extends State<Wrapped2025Page> {
     );
   }
 
+  bool _telebirrSenderHasPhone(String sender) {
+    final hasParens = sender.contains('(') && sender.contains(')');
+    final hasDigits = RegExp(r'\d').hasMatch(sender);
+    return hasParens && hasDigits;
+  }
+
+  String _bankLabelForTransaction(
+    Transaction transaction,
+    Map<int, Bank> banksById,
+  ) {
+    final bankId = transaction.bankId;
+    if (bankId == null) return 'Unknown bank';
+    final bank = banksById[bankId];
+    return bank?.shortName ?? bank?.name ?? 'Bank $bankId';
+  }
+
   String _formatCurrency(double value) {
     return 'ETB ${formatNumberWithComma(value)}';
   }
@@ -374,6 +376,7 @@ class _Wrapped2025PageState extends State<Wrapped2025Page> {
       const Color(0xFF118AB2),
       const Color(0xFF06D6A0),
       const Color(0xFFFA7921),
+      const Color(0xFF4D96FF),
     ];
 
     final monthLabel = summary.topMonth.month == null
@@ -393,6 +396,22 @@ class _Wrapped2025PageState extends State<Wrapped2025Page> {
         : '${summary.biggestTransaction!.isIncome ? 'Income' : 'Expense'} on ${_formatDate(summary.biggestTransaction!.date)}';
 
     final netLabel = summary.netFlow >= 0 ? 'Net saved' : 'Net outflow';
+    final totalFees = summary.totalServiceCharge + summary.totalVat;
+    final feeLines = summary.feesByBank.entries.toList()
+      ..sort((a, b) {
+        final totalA = a.value.serviceCharge + a.value.vat;
+        final totalB = b.value.serviceCharge + b.value.vat;
+        return totalB.compareTo(totalA);
+      });
+    final feeBreakdown = feeLines.isEmpty
+        ? ''
+        : feeLines
+            .map(
+              (entry) =>
+                  '${entry.key}: ${_formatCurrency(entry.value.serviceCharge)} fees + ${_formatCurrency(entry.value.vat)} VAT',
+            )
+            .join('\n');
+    final feeDetailText = feeBreakdown.isEmpty ? '' : '\n$feeBreakdown';
 
     return [
       _WrappedSlideData(
@@ -420,6 +439,16 @@ class _Wrapped2025PageState extends State<Wrapped2025Page> {
         subtitle: _formatCurrency(summary.totalExpense),
         icon: Icons.trending_down,
         accent: accents[2],
+      ),
+      _WrappedSlideData(
+        kicker: 'Transaction fees',
+        title: 'Service charge + VAT',
+        value: totalFees == 0 ? 'ETB 0.00' : _formatCompactCurrency(totalFees),
+        subtitle: summary.feeTransactionCount == 0
+            ? 'No fees captured in $_wrappedYear.'
+            : 'You spent ${_formatCurrency(totalFees)} in fees across ${summary.feeTransactionCount} transactions.$feeDetailText',
+        icon: Icons.receipt_long_outlined,
+        accent: accents[10],
       ),
       _WrappedSlideData(
         kicker: 'Balance',
@@ -565,22 +594,6 @@ class _Wrapped2025PageState extends State<Wrapped2025Page> {
                   context,
                   slides.length,
                   slides[_currentPage].accent,
-                ),
-              ),
-            ),
-          ),
-          Positioned.fill(
-            child: IgnorePointer(
-              ignoring: !_showIntro,
-              child: AnimatedOpacity(
-                opacity: _showIntro ? 1 : 0,
-                duration: const Duration(milliseconds: 450),
-                curve: Curves.easeOut,
-                child: AnimatedScale(
-                  scale: _showIntro ? 1 : 1.02,
-                  duration: const Duration(milliseconds: 450),
-                  curve: Curves.easeOut,
-                  child: _buildIntroOverlay(context),
                 ),
               ),
             ),
@@ -804,119 +817,6 @@ class _Wrapped2025PageState extends State<Wrapped2025Page> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildIntroOverlay(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final accent = scheme.primary;
-    final stepLabel = _introSteps[_introStep];
-    final progress = (_introStep + 1) / _introSteps.length;
-
-    return GestureDetector(
-      onTap: _dismissIntro,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              accent.withOpacity(0.24),
-              Theme.of(context).scaffoldBackgroundColor,
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: scheme.surfaceVariant.withOpacity(0.6),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    'Totals Wrapped $_wrappedYear',
-                    style: TextStyle(
-                      color: scheme.onSurfaceVariant,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Getting your recap ready',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: scheme.onSurface,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 320),
-                  transitionBuilder: (child, animation) {
-                    final offsetTween =
-                        Tween(begin: const Offset(0, 0.2), end: Offset.zero);
-                    return FadeTransition(
-                      opacity: animation,
-                      child: SlideTransition(
-                        position: offsetTween.animate(
-                          CurvedAnimation(
-                            parent: animation,
-                            curve: Curves.easeOut,
-                          ),
-                        ),
-                        child: child,
-                      ),
-                    );
-                  },
-                  child: Text(
-                    stepLabel,
-                    key: ValueKey(stepLabel),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                SizedBox(
-                  width: 220,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(999),
-                    child: LinearProgressIndicator(
-                      value: progress,
-                      minHeight: 6,
-                      backgroundColor:
-                          scheme.onSurfaceVariant.withOpacity(0.2),
-                      valueColor: AlwaysStoppedAnimation<Color>(accent),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Tap to skip',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -1165,6 +1065,10 @@ class _WrappedSummary {
   final double totalIncome;
   final double totalExpense;
   final double netFlow;
+  final double totalServiceCharge;
+  final double totalVat;
+  final int feeTransactionCount;
+  final Map<String, _FeeBreakdown> feesByBank;
   final _CategoryHighlight topCategory;
   final _BankHighlight topBank;
   final _MonthHighlight topMonth;
@@ -1178,12 +1082,26 @@ class _WrappedSummary {
     required this.totalIncome,
     required this.totalExpense,
     required this.netFlow,
+    required this.totalServiceCharge,
+    required this.totalVat,
+    required this.feeTransactionCount,
+    required this.feesByBank,
     required this.topCategory,
     required this.topBank,
     required this.topMonth,
     required this.topSentTo,
     required this.topReceivedFrom,
     required this.biggestTransaction,
+  });
+}
+
+class _FeeBreakdown {
+  final double serviceCharge;
+  final double vat;
+
+  const _FeeBreakdown({
+    required this.serviceCharge,
+    required this.vat,
   });
 }
 

@@ -97,6 +97,18 @@ class PatternParser {
           if (match.groupNames.contains("receiver")) {
             extracted['receiver'] = match.namedGroup('receiver');
           }
+          _assignOptionalAmount(
+            extracted,
+            'serviceCharge',
+            match,
+            const ['serviceCharge', 'ServiceCharge', 'servicecharge', 'service_charge'],
+          );
+          _assignOptionalAmount(
+            extracted,
+            'vat',
+            match,
+            const ['vat', 'VAT'],
+          );
           String? counterparty = _firstNamedGroup(match, const [
             'sender',
             'source',
@@ -174,6 +186,23 @@ class PatternParser {
 
     print("debug: \n✗ No matching pattern found for message.");
     return null; // No match found
+  }
+
+  static void _assignOptionalAmount(
+    Map<String, dynamic> target,
+    String key,
+    RegExpMatch match,
+    List<String> groupNames,
+  ) {
+    for (final name in groupNames) {
+      if (!match.groupNames.contains(name)) continue;
+      final cleaned = _cleanNumber(match.namedGroup(name));
+      final value = cleaned == null ? null : double.tryParse(cleaned);
+      if (value != null) {
+        target[key] = value;
+      }
+      return;
+    }
   }
 
   static String? _firstNamedGroup(

@@ -5,6 +5,7 @@ import 'package:totals/models/transaction.dart';
 import 'package:totals/providers/transaction_provider.dart';
 import 'package:totals/utils/category_icons.dart';
 import 'package:totals/utils/category_style.dart';
+import 'package:totals/utils/text_utils.dart';
 import 'package:totals/widgets/categorize_transaction_sheet.dart';
 
 class TodayTransactionsList extends StatelessWidget {
@@ -159,6 +160,9 @@ class _TodayTransactionItem extends StatelessWidget {
           ? receiver
           : (sender != null && sender.isNotEmpty ? sender : null);
       counterpartyPrefix = 'to';
+    }
+    if (isCredit && transaction.bankId == 6 && counterparty != null) {
+      counterparty = formatTelebirrSenderName(counterparty);
     }
     final counterpartyLabel = counterparty == null
         ? null
