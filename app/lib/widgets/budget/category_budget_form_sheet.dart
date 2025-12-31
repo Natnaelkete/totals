@@ -1,4 +1,6 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:totals/models/budget.dart';
 import 'package:totals/providers/budget_provider.dart';
@@ -13,15 +15,17 @@ class CategoryBudgetFormSheet extends StatefulWidget {
   });
 
   @override
-  State<CategoryBudgetFormSheet> createState() => _CategoryBudgetFormSheetState();
+  State<CategoryBudgetFormSheet> createState() =>
+      _CategoryBudgetFormSheetState();
 }
 
 class _CategoryBudgetFormSheetState extends State<CategoryBudgetFormSheet> {
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
-  final _alertThresholdController = TextEditingController();
+  final _alertThresholdController = TextEditingController(text: '80');
 
   int? _selectedCategoryId;
+  String _selectedTimeFrame = 'monthly';
   bool _isLoading = false;
 
   @override
@@ -29,8 +33,10 @@ class _CategoryBudgetFormSheetState extends State<CategoryBudgetFormSheet> {
     super.initState();
     if (widget.budget != null) {
       _amountController.text = widget.budget!.amount.toStringAsFixed(2);
-      _alertThresholdController.text = widget.budget!.alertThreshold.toStringAsFixed(1);
+      _alertThresholdController.text =
+          widget.budget!.alertThreshold.toStringAsFixed(1);
       _selectedCategoryId = widget.budget!.categoryId;
+      _selectedTimeFrame = widget.budget!.timeFrame ?? 'monthly';
     }
   }
 
@@ -43,38 +49,56 @@ class _CategoryBudgetFormSheetState extends State<CategoryBudgetFormSheet> {
 
   DateTime _getPeriodStart() {
     final now = DateTime.now();
-    return DateTime(now.year, now.month, 1);
+    switch (_selectedTimeFrame) {
+      case 'daily':
+        return DateTime(now.year, now.month, now.day);
+      case 'monthly':
+        return DateTime(now.year, now.month, 1);
+      case 'yearly':
+        return DateTime(now.year, 1, 1);
+      default:
+        return DateTime.now();
+    }
   }
 
   Future<void> _saveBudget() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      HapticFeedback.vibrate();
+      return;
+    }
 
-    setState(() {
-      _isLoading = true;
-    });
+    if (_selectedCategoryId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a category')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    HapticFeedback.mediumImpact();
 
     try {
       final amount = double.parse(_amountController.text);
       final alertThreshold = double.parse(_alertThresholdController.text);
 
-      // Get category name for budget name
-      final transactionProvider = Provider.of<TransactionProvider>(context, listen: false);
+      final transactionProvider =
+          Provider.of<TransactionProvider>(context, listen: false);
       final category = transactionProvider.categories.firstWhere(
         (c) => c.id == _selectedCategoryId,
-        orElse: () => throw Exception('Category not found'),
       );
 
       final budget = Budget(
         id: widget.budget?.id,
-        name: '${category.name} Budget', // Auto-generate name from category
-        type: 'category', // Always 'category' type
+        name: '${category.name} Budget',
+        type: 'category',
         amount: amount,
         categoryId: _selectedCategoryId,
         startDate: widget.budget?.startDate ?? _getPeriodStart(),
-        rollover: false, // Default to false for category budgets
+        rollover: false,
         alertThreshold: alertThreshold,
         isActive: widget.budget?.isActive ?? true,
         createdAt: widget.budget?.createdAt ?? DateTime.now(),
+        timeFrame: _selectedTimeFrame,
       );
 
       final provider = Provider.of<BudgetProvider>(context, listen: false);
@@ -84,32 +108,24 @@ class _CategoryBudgetFormSheetState extends State<CategoryBudgetFormSheet> {
         await provider.updateBudget(budget);
       }
 
-      if (mounted) {
-        Navigator.of(context).pop();
-      }
+      if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving budget: $e')),
+          SnackBar(content: Text('Error: $e')),
         );
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _deleteBudget() async {
-    if (widget.budget?.id == null) return;
-
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAdaptiveDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => AlertDialog.adaptive(
         title: const Text('Delete Budget'),
-        content: Text('Are you sure you want to delete this category budget? This action cannot be undone.'),
+        content: const Text('Are you sure? This action cannot be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -117,9 +133,7 @@ class _CategoryBudgetFormSheetState extends State<CategoryBudgetFormSheet> {
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.red,
-            ),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Delete'),
           ),
         ],
@@ -128,184 +142,262 @@ class _CategoryBudgetFormSheetState extends State<CategoryBudgetFormSheet> {
 
     if (confirmed != true) return;
 
-    setState(() {
-      _isLoading = true;
-    });
-
+    setState(() => _isLoading = true);
     try {
-      final provider = Provider.of<BudgetProvider>(context, listen: false);
-      await provider.deleteBudget(widget.budget!.id!);
-
+      await Provider.of<BudgetProvider>(context, listen: false)
+          .deleteBudget(widget.budget!.id!);
       if (mounted) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Budget deleted successfully')),
+          const SnackBar(content: Text('Budget deleted')),
         );
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error deleting budget: $e')),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final categories = Provider.of<TransactionProvider>(context, listen: false)
+    final theme = Theme.of(context);
+    final categories = Provider.of<TransactionProvider>(context)
         .categories
         .where((c) => c.flow == 'expense')
         .toList();
 
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
       ),
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Theme.of(context).scaffoldBackgroundColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Form(
-          key: _formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                Text(
-                  widget.budget == null ? 'Create Category Budget' : 'Edit Category Budget',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.onSurface,
+      padding: EdgeInsets.only(
+        left: 24,
+        right: 24,
+        top: 12,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Pull Handle
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 24),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.outlineVariant,
+                    borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-                const SizedBox(height: 24),
-                DropdownButtonFormField<int?>(
-                  value: _selectedCategoryId,
-                  decoration: const InputDecoration(
-                    labelText: 'Category',
-                  ),
-                  items: [
-                    const DropdownMenuItem<int?>(
-                      value: null,
-                      child: Text('Select a category'),
-                    ),
-                    ...categories.map((category) {
-                      return DropdownMenuItem<int?>(
-                        value: category.id,
-                        child: Text(category.name),
-                      );
-                    }),
-                  ],
-                  onChanged: widget.budget == null
-                      ? (value) {
-                          setState(() {
-                            _selectedCategoryId = value;
-                          });
-                        }
-                      : null, // Disable category selection when editing
-                  validator: (value) {
-                    if (value == null) {
-                      return 'Please select a category';
-                    }
-                    return null;
+              ),
+
+              Text(
+                widget.budget == null ? 'New Budget' : 'Edit Budget',
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Category Chip Selector
+              _buildSectionLabel("Category"),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 40,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: categories.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    final cat = categories[index];
+                    final isSelected = _selectedCategoryId == cat.id;
+                    return ChoiceChip(
+                      showCheckmark: false,
+                      label: Text(cat.name),
+                      selected: isSelected,
+                      onSelected: widget.budget != null
+                          ? null
+                          : (selected) {
+                              setState(() => _selectedCategoryId = cat.id);
+                            },
+                      labelStyle: TextStyle(
+                        color: isSelected
+                            ? Colors.white
+                            : theme.colorScheme.onSurfaceVariant,
+                        fontWeight:
+                            isSelected ? FontWeight.bold : FontWeight.normal,
+                      ),
+                      selectedColor: theme.colorScheme.primary,
+                      backgroundColor:
+                          theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      side: BorderSide.none,
+                    );
                   },
                 ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _amountController,
-                  decoration: const InputDecoration(
-                    labelText: 'Budget Amount',
-                    hintText: '0.00',
-                    prefixText: 'ETB ',
-                  ),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter an amount';
-                    }
-                    final amount = double.tryParse(value);
-                    if (amount == null || amount <= 0) {
-                      return 'Please enter a valid amount';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _alertThresholdController,
-                  decoration: const InputDecoration(
-                    labelText: 'Alert Threshold (%)',
-                    hintText: '80',
-                    helperText: 'Get notified when budget reaches this percentage',
-                  ),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter an alert threshold';
-                    }
-                    final threshold = double.tryParse(value);
-                    if (threshold == null || threshold < 0 || threshold > 100) {
-                      return 'Please enter a value between 0 and 100';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 24),
-                if (widget.budget != null) ...[
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
+              ),
+              const SizedBox(height: 24),
+
+              // Time Frame Segmented Control
+              _buildSectionLabel("Reset Frequency"),
+              const SizedBox(height: 12),
+              CupertinoSlidingSegmentedControl<String>(
+                groupValue: _selectedTimeFrame,
+                backgroundColor:
+                    theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                thumbColor: theme.colorScheme.surface,
+                children: {
+                  'daily': _buildSegmentText('Daily'),
+                  'monthly': _buildSegmentText('Monthly'),
+                  'yearly': _buildSegmentText('Yearly'),
+                },
+                onValueChanged: (val) {
+                  HapticFeedback.selectionClick();
+                  setState(() => _selectedTimeFrame = val!);
+                },
+              ),
+              const SizedBox(height: 24),
+
+              // Amount Input
+              _buildModernField(
+                controller: _amountController,
+                label: "Budget Limit",
+                icon: Icons.account_balance_wallet_rounded,
+                prefix: "ETB ",
+                hint: "0.00",
+              ),
+              const SizedBox(height: 20),
+
+              // Alert Threshold Input
+              _buildModernField(
+                controller: _alertThresholdController,
+                label: "Alert Threshold",
+                icon: Icons.notifications_active_rounded,
+                suffix: "%",
+                hint: "80",
+              ),
+              const SizedBox(height: 32),
+
+              // Buttons
+              Row(
+                children: [
+                  if (widget.budget != null) ...[
+                    IconButton.filledTonal(
                       onPressed: _isLoading ? null : _deleteBudget,
-                      icon: const Icon(Icons.delete_outline),
-                      label: const Text('Delete Budget'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red,
-                        side: BorderSide(color: Colors.red.withOpacity(0.5)),
+                      icon: const Icon(Icons.delete_outline_rounded,
+                          color: Colors.red),
+                      style: IconButton.styleFrom(
+                        padding: const EdgeInsets.all(16),
+                        backgroundColor: Colors.red.withOpacity(0.1),
                       ),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _saveBudget,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: theme.colorScheme.primary,
+                        foregroundColor: theme.colorScheme.onPrimary,
+                        padding: const EdgeInsets.symmetric(vertical: 18),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18)),
+                      ),
+                      child: _isLoading
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white))
+                          : Text(
+                              widget.budget == null
+                                  ? 'Create Budget'
+                                  : 'Update Budget',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
                     ),
                   ),
-                  const SizedBox(height: 16),
                 ],
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
-                        child: const Text('Cancel'),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      flex: 2,
-                      child: ElevatedButton(
-                        onPressed: _isLoading ? null : _saveBudget,
-                        child: _isLoading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : Text(widget.budget == null ? 'Create' : 'Update'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildSectionLabel(String text) {
+    return Text(
+      text.toUpperCase(),
+      style: TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.bold,
+        letterSpacing: 1.2,
+        color: Theme.of(context).colorScheme.primary.withOpacity(0.8),
+      ),
+    );
+  }
+
+  Widget _buildSegmentText(String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Text(text,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+    );
+  }
+
+  Widget _buildModernField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    String? prefix,
+    String? suffix,
+    String? hint,
+  }) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionLabel(label),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          decoration: InputDecoration(
+            hintText: hint,
+            prefixText: prefix,
+            suffixText: suffix,
+            prefixIcon: Icon(icon, color: theme.colorScheme.primary),
+            filled: true,
+            fillColor: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide:
+                  BorderSide(color: theme.colorScheme.primary, width: 2),
+            ),
+            contentPadding: const EdgeInsets.all(20),
+          ),
+          validator: (value) {
+            if (value == null || value.isEmpty) return 'Required';
+            if (double.tryParse(value) == null) return 'Invalid number';
+            return null;
+          },
+        ),
+      ],
     );
   }
 }
