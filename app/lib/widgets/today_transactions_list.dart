@@ -145,6 +145,25 @@ class _TodayTransactionItem extends StatelessWidget {
     final timeStr =
         dateTime != null ? DateFormat('hh:mm a').format(dateTime) : '';
 
+    final sender = transaction.creditor?.trim();
+    final receiver = transaction.receiver?.trim();
+    String? counterparty;
+    String? counterpartyPrefix;
+    if (isCredit) {
+      counterparty = (sender != null && sender.isNotEmpty)
+          ? sender
+          : (receiver != null && receiver.isNotEmpty ? receiver : null);
+      counterpartyPrefix = 'from';
+    } else {
+      counterparty = (receiver != null && receiver.isNotEmpty)
+          ? receiver
+          : (sender != null && sender.isNotEmpty ? sender : null);
+      counterpartyPrefix = 'to';
+    }
+    final counterpartyLabel = counterparty == null
+        ? null
+        : '$counterpartyPrefix $counterparty';
+
     final category = provider.getCategoryById(transaction.categoryId);
     final categoryColor = category == null
         ? Theme.of(context).colorScheme.onSurfaceVariant
@@ -203,12 +222,11 @@ class _TodayTransactionItem extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        if (transaction.creditor != null ||
-                            transaction.receiver != null)
+                        if (counterpartyLabel != null)
                           const SizedBox(height: 4),
-                        if (transaction.creditor != null)
+                        if (counterpartyLabel != null)
                           Text(
-                            transaction.creditor!,
+                            counterpartyLabel,
                             style: TextStyle(
                               fontSize: 13,
                               color: Theme.of(context)

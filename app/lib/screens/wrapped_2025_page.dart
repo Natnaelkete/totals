@@ -106,6 +106,12 @@ class _Wrapped2025PageState extends State<Wrapped2025Page> {
     }
   }
 
+  String? _cleanCounterparty(String? raw) {
+    final trimmed = raw?.trim();
+    if (trimmed == null || trimmed.isEmpty) return null;
+    return trimmed;
+  }
+
   bool _isIncome(Transaction transaction) {
     final type = transaction.type?.toUpperCase() ?? '';
     if (type.contains('CREDIT')) return true;
@@ -140,6 +146,8 @@ class _Wrapped2025PageState extends State<Wrapped2025Page> {
     final monthCounts = <int, int>{};
     final monthSpend = <int, double>{};
     final categorySpend = <int?, double>{};
+    final sentTotals = <String, double>{};
+    final receivedTotals = <String, double>{};
 
     Transaction? biggest;
     double biggestAmount = 0.0;
@@ -184,6 +192,27 @@ class _Wrapped2025PageState extends State<Wrapped2025Page> {
           (value) => value + amount,
           ifAbsent: () => amount,
         );
+
+        final recipient = _cleanCounterparty(transaction.receiver) ??
+            _cleanCounterparty(transaction.creditor);
+        if (recipient != null) {
+          sentTotals.update(
+            recipient,
+            (value) => value + amount,
+            ifAbsent: () => amount,
+          );
+        }
+      } else {
+        final amount = transaction.amount.abs();
+        final sender = _cleanCounterparty(transaction.creditor) ??
+            _cleanCounterparty(transaction.receiver);
+        if (sender != null) {
+          receivedTotals.update(
+            sender,
+            (value) => value + amount,
+            ifAbsent: () => amount,
+          );
+        }
       }
 
       final amountAbs = transaction.amount.abs();
@@ -268,6 +297,9 @@ class _Wrapped2025PageState extends State<Wrapped2025Page> {
       );
     }
 
+    final sentHighlight = _resolveTopCounterparty(sentTotals);
+    final receivedHighlight = _resolveTopCounterparty(receivedTotals);
+
     return _WrappedSummary(
       totalTransactions: transactions.length,
       activeDays: activeDays.length,
@@ -288,7 +320,34 @@ class _Wrapped2025PageState extends State<Wrapped2025Page> {
         count: topMonthCount,
         spend: topMonthSpend,
       ),
+      topSentTo: sentHighlight,
+      topReceivedFrom: receivedHighlight,
       biggestTransaction: biggestHighlight,
+    );
+  }
+
+  _CounterpartyHighlight _resolveTopCounterparty(
+    Map<String, double> totals,
+  ) {
+    if (totals.isEmpty) {
+      return const _CounterpartyHighlight(
+        label: 'No data yet',
+        amount: 0.0,
+      );
+    }
+
+    String topLabel = 'No data yet';
+    double topAmount = 0.0;
+    for (final entry in totals.entries) {
+      if (entry.value > topAmount) {
+        topLabel = entry.key;
+        topAmount = entry.value;
+      }
+    }
+
+    return _CounterpartyHighlight(
+      label: topLabel,
+      amount: topAmount,
     );
   }
 
@@ -313,6 +372,8 @@ class _Wrapped2025PageState extends State<Wrapped2025Page> {
       const Color(0xFF00B4D8),
       const Color(0xFFEF476F),
       const Color(0xFF118AB2),
+      const Color(0xFF06D6A0),
+      const Color(0xFFFA7921),
     ];
 
     final monthLabel = summary.topMonth.month == null
@@ -381,12 +442,36 @@ class _Wrapped2025PageState extends State<Wrapped2025Page> {
         accent: accents[4],
       ),
       _WrappedSlideData(
+        kicker: 'Top recipient',
+        title: 'You sent the most to',
+        value: summary.topSentTo.amount == 0
+            ? 'No recipients yet'
+            : summary.topSentTo.label,
+        subtitle: summary.topSentTo.amount == 0
+            ? 'No outgoing transfers yet.'
+            : _formatCurrency(summary.topSentTo.amount),
+        icon: Icons.send_outlined,
+        accent: accents[5],
+      ),
+      _WrappedSlideData(
+        kicker: 'Top sender',
+        title: 'You received the most from',
+        value: summary.topReceivedFrom.amount == 0
+            ? 'No senders yet'
+            : summary.topReceivedFrom.label,
+        subtitle: summary.topReceivedFrom.amount == 0
+            ? 'No incoming transfers yet.'
+            : _formatCurrency(summary.topReceivedFrom.amount),
+        icon: Icons.call_received_outlined,
+        accent: accents[6],
+      ),
+      _WrappedSlideData(
         kicker: 'Peak month',
         title: 'Most active month',
         value: monthLabel,
         subtitle: monthSubtitle,
         icon: Icons.calendar_today_outlined,
-        accent: accents[5],
+        accent: accents[7],
       ),
       _WrappedSlideData(
         kicker: 'Biggest moment',
@@ -394,7 +479,7 @@ class _Wrapped2025PageState extends State<Wrapped2025Page> {
         value: biggestLabel,
         subtitle: biggestSubtitle,
         icon: Icons.flash_on_outlined,
-        accent: accents[6],
+        accent: accents[8],
       ),
       _WrappedSlideData(
         kicker: 'Top bank',
@@ -404,7 +489,7 @@ class _Wrapped2025PageState extends State<Wrapped2025Page> {
             ? 'Add more activity to unlock this highlight.'
             : '${summary.topBank.count} transactions in $_wrappedYear.',
         icon: Icons.account_balance_outlined,
-        accent: accents[7],
+        accent: accents[9],
         footnote: 'End of recap. Swipe back anytime.',
       ),
     ];
@@ -1083,6 +1168,8 @@ class _WrappedSummary {
   final _CategoryHighlight topCategory;
   final _BankHighlight topBank;
   final _MonthHighlight topMonth;
+  final _CounterpartyHighlight topSentTo;
+  final _CounterpartyHighlight topReceivedFrom;
   final _BiggestTransaction? biggestTransaction;
 
   const _WrappedSummary({
@@ -1094,6 +1181,8 @@ class _WrappedSummary {
     required this.topCategory,
     required this.topBank,
     required this.topMonth,
+    required this.topSentTo,
+    required this.topReceivedFrom,
     required this.biggestTransaction,
   });
 }
@@ -1129,6 +1218,16 @@ class _MonthHighlight {
     required this.month,
     required this.count,
     required this.spend,
+  });
+}
+
+class _CounterpartyHighlight {
+  final String label;
+  final double amount;
+
+  const _CounterpartyHighlight({
+    required this.label,
+    required this.amount,
   });
 }
 

@@ -191,12 +191,28 @@ class RecentTransactionsCard extends StatelessWidget {
   }
 
   static String _titleFor(Transaction tx) {
-    final parts = [
-      tx.creditor?.trim(),
-      tx.receiver?.trim(),
-      tx.reference.trim(),
-    ].whereType<String>().where((s) => s.isNotEmpty).toList();
-    return parts.isEmpty ? 'Transaction' : parts.first;
+    final isCredit = tx.type == 'CREDIT';
+    final sender = tx.creditor?.trim();
+    final receiver = tx.receiver?.trim();
+
+    if (isCredit) {
+      final counterparty = (sender != null && sender.isNotEmpty)
+          ? sender
+          : (receiver != null && receiver.isNotEmpty ? receiver : null);
+      if (counterparty != null && counterparty.isNotEmpty) {
+        return 'from $counterparty';
+      }
+    } else {
+      final counterparty = (receiver != null && receiver.isNotEmpty)
+          ? receiver
+          : (sender != null && sender.isNotEmpty ? sender : null);
+      if (counterparty != null && counterparty.isNotEmpty) {
+        return 'to $counterparty';
+      }
+    }
+
+    final fallback = tx.reference.trim();
+    return fallback.isEmpty ? 'Transaction' : fallback;
   }
 
   static String _timeLabel(Transaction tx) {
