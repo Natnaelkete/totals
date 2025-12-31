@@ -530,7 +530,6 @@ class _Wrapped2025PageState extends State<Wrapped2025Page> {
             : '${summary.topBank.count} transactions in $_wrappedYear.',
         icon: Icons.account_balance_rounded,
         accent: accents[9],
-        footnote: 'End of recap. Swipe back anytime.',
       ),
     ];
   }

@@ -1,8 +1,13 @@
-import 'dart:ui';
+import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:totals/models/bank.dart';
 import 'package:totals/models/transaction.dart';
 import 'package:totals/providers/transaction_provider.dart';
@@ -58,13 +63,62 @@ class _StatsRecapPageState extends State<StatsRecapPage> {
   }
 }
 
-class StatsRecapContent extends StatelessWidget {
+class StatsRecapContent extends StatefulWidget {
   final StatsRecapData data;
 
   const StatsRecapContent({
     super.key,
     required this.data,
   });
+
+  @override
+  State<StatsRecapContent> createState() => _StatsRecapContentState();
+}
+
+class _StatsRecapContentState extends State<StatsRecapContent> {
+  final GlobalKey _repaintBoundaryKey = GlobalKey();
+  bool _isCapturing = false;
+
+  Future<void> _captureAndShare() async {
+    setState(() {
+      _isCapturing = true;
+    });
+
+    try {
+      // Wait a bit for UI to settle
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      final RenderRepaintBoundary boundary =
+          _repaintBoundaryKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+      final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+      final ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      final Uint8List pngBytes = byteData!.buffer.asUint8List();
+
+      // Save to temporary directory
+      final directory = await getTemporaryDirectory();
+      final imagePath = '${directory.path}/recap_${widget.data.year}_${DateTime.now().millisecondsSinceEpoch}.png';
+      final imageFile = File(imagePath);
+      await imageFile.writeAsBytes(pngBytes);
+
+      // Share the image
+      await Share.shareXFiles(
+        [XFile(imagePath)],
+        text: 'My ${widget.data.year} Totals Recap!',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error sharing recap: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCapturing = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -98,10 +152,12 @@ class StatsRecapContent extends StatelessWidget {
                 Expanded(
                   child: SingleChildScrollView(
                     physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(24, 32, 24, 32),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+                    padding: const EdgeInsets.fromLTRB(24, 32, 24, 100),
+                    child: RepaintBoundary(
+                      key: _repaintBoundaryKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           crossAxisAlignment: CrossAxisAlignment.end,
@@ -120,7 +176,7 @@ class StatsRecapContent extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 4),
                                 const Text(
-                                  'Your Year',
+                                  'Your Year in totals',
                                   style: TextStyle(
                                     fontSize: 32,
                                     fontWeight: FontWeight.w900,
@@ -138,7 +194,7 @@ class StatsRecapContent extends StatelessWidget {
                                 border: Border.all(color: Colors.white.withOpacity(0.1)),
                               ),
                               child: Text(
-                                '${data.year}',
+                                '${widget.data.year}',
                                 style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w900,
@@ -164,7 +220,7 @@ class StatsRecapContent extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(height: 24),
-                              _BankCluster(banks: data.topBanks),
+                              _BankCluster(banks: widget.data.topBanks),
                             ],
                           ),
                         ),
@@ -173,8 +229,8 @@ class StatsRecapContent extends StatelessWidget {
                         
                         // Table-like sections for sent/received
                         _ModernCounterpartyGrid(
-                          sentTo: data.topSentTo,
-                          receivedFrom: data.topReceivedFrom,
+                          sentTo: widget.data.topSentTo,
+                          receivedFrom: widget.data.topReceivedFrom,
                         ),
                         
                         const SizedBox(height: 48),
@@ -202,6 +258,53 @@ class StatsRecapContent extends StatelessWidget {
                                 ),
                               ),
                             ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    ),
+                  ),
+                ),
+                // Save and Share Button
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F1014),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.3),
+                        blurRadius: 10,
+                        offset: const Offset(0, -5),
+                      ),
+                    ],
+                  ),
+                  child: SafeArea(
+                    top: false,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _isCapturing ? null : _captureAndShare,
+                            icon: _isCapturing
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                    ),
+                                  )
+                                : const Icon(Icons.share_rounded),
+                            label: Text(_isCapturing ? 'Preparing...' : 'Save & Share'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: const Color(0xFF0F1014),
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              elevation: 0,
+                            ),
                           ),
                         ),
                       ],
