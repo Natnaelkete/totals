@@ -16,29 +16,36 @@ class BudgetAlertBanner extends StatelessWidget {
     }
 
     final isExceeded = status.isExceeded;
-    final color = isExceeded ? Colors.red : Colors.orange;
-    final icon = isExceeded ? Icons.warning : Icons.info_outline;
+    final color = isExceeded ? const Color(0xFFFF5252) : const Color(0xFFFFB300);
+    final icon = isExceeded ? Icons.report_gmailerrorred_rounded : Icons.info_outline_rounded;
     final message = isExceeded
-        ? '${status.budget.name} budget exceeded by ${(status.spent - status.budget.amount).toStringAsFixed(2)}'
-        : '${status.budget.name} budget is ${status.percentageUsed.toStringAsFixed(1)}% used';
+        ? '${status.budget.name} budget exceeded by ${(status.spent - status.budget.amount).toStringAsFixed(2)} ETB'
+        : 'Warning: ${status.budget.name} is ${status.percentageUsed.toStringAsFixed(1)}% consumed';
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: color.withOpacity(0.3),
+          color: color.withOpacity(0.2),
           width: 1,
         ),
       ),
       child: Row(
         children: [
-          Icon(
-            icon,
-            color: color,
-            size: 20,
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              icon,
+              color: color,
+              size: 18,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -46,8 +53,9 @@ class BudgetAlertBanner extends StatelessWidget {
               message,
               style: TextStyle(
                 color: color,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.2,
               ),
             ),
           ),

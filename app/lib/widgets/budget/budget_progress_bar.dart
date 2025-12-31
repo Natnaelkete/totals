@@ -8,18 +8,18 @@ class BudgetProgressBar extends StatelessWidget {
   const BudgetProgressBar({
     super.key,
     required this.status,
-    this.height = 8.0,
+    this.height = 10.0,
   });
 
   Color _getProgressColor() {
     if (status.isExceeded) {
-      return Colors.red;
+      return const Color(0xFFFF5252);
     } else if (status.isApproachingLimit) {
-      return Colors.orange;
+      return const Color(0xFFFFB300);
     } else if (status.percentageUsed < 70) {
-      return Colors.green;
+      return const Color(0xFF00C853);
     } else {
-      return Colors.yellow;
+      return const Color(0xFF2979FF);
     }
   }
 
@@ -28,13 +28,29 @@ class BudgetProgressBar extends StatelessWidget {
     final percentage = status.percentageUsed.clamp(0.0, 100.0);
     final color = _getProgressColor();
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(height / 2),
-      child: LinearProgressIndicator(
-        value: percentage / 100,
-        minHeight: height,
-        backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
-        valueColor: AlwaysStoppedAnimation<Color>(color),
+    return Container(
+      height: height,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(height / 2),
+      ),
+      child: FractionallySizedBox(
+        alignment: Alignment.centerLeft,
+        widthFactor: percentage / 100,
+        child: Container(
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(height / 2),
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(0.3),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

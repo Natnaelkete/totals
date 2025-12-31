@@ -15,8 +15,11 @@ class CategoryBudgetList extends StatelessWidget {
     return Consumer<BudgetProvider>(
       builder: (context, budgetProvider, child) {
         if (budgetProvider.isLoading) {
-          return const Center(
-            child: CircularProgressIndicator(),
+          return const Padding(
+            padding: EdgeInsets.only(top: 60),
+            child: Center(
+              child: CircularProgressIndicator(),
+            ),
           );
         }
 
@@ -24,8 +27,11 @@ class CategoryBudgetList extends StatelessWidget {
           future: budgetProvider.getCategoryBudgets(),
           builder: (context, snapshot) {
             if (!snapshot.hasData) {
-              return const Center(
-                child: CircularProgressIndicator(),
+              return const Padding(
+                padding: EdgeInsets.only(top: 60),
+                child: Center(
+                  child: CircularProgressIndicator(),
+                ),
               );
             }
 
@@ -33,31 +39,42 @@ class CategoryBudgetList extends StatelessWidget {
 
             if (categoryBudgets.isEmpty) {
               return Padding(
-                padding: const EdgeInsets.all(32),
+                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 80),
                 child: Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(
-                        Icons.account_balance_wallet_outlined,
-                        size: 64,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No category budgets yet',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primary.withOpacity(0.05),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.category_outlined,
+                          size: 48,
+                          color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 24),
                       Text(
-                        'Create a budget for a specific category',
+                        'No Category Budgets',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.5,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Set targets for specific types of spending to gain better control.',
                         style: TextStyle(
                           fontSize: 14,
+                          height: 1.5,
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
+                        textAlign: TextAlign.center,
                       ),
                     ],
                   ),
@@ -67,6 +84,7 @@ class CategoryBudgetList extends StatelessWidget {
 
             return ListView.builder(
               shrinkWrap: true,
+              padding: const EdgeInsets.only(bottom: 20),
               physics: const NeverScrollableScrollPhysics(),
               itemCount: categoryBudgets.length,
               itemBuilder: (context, index) {
