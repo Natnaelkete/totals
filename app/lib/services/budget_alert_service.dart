@@ -2,11 +2,13 @@ import 'package:totals/models/budget.dart';
 import 'package:totals/services/budget_service.dart';
 import 'package:totals/services/notification_service.dart';
 import 'package:totals/services/notification_settings_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class BudgetAlertService {
   final BudgetService _budgetService = BudgetService();
 
   static const int _budgetNotificationIdBase = 10000;
+  static const String _alertSentPrefix = 'budget_alert_sent';
 
   // Check budgets against current spending and generate alerts
   Future<List<BudgetAlert>> checkBudgetAlerts() async {
@@ -54,6 +56,9 @@ class BudgetAlertService {
         await NotificationSettingsService.instance.isBudgetAlertsEnabled();
     if (!enabled) return;
 
+    final alreadySent = await _hasSentAlert(alert);
+    if (alreadySent) return;
+
     final title = alert.alertType == BudgetAlertType.exceeded
         ? 'Budget Exceeded'
         : 'Budget Warning';
@@ -65,6 +70,34 @@ class BudgetAlertService {
       title: title,
       body: alert.message,
     );
+
+    await _markAlertSent(alert);
+  }
+
+  Future<bool> _hasSentAlert(BudgetAlert alert) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_alertKey(alert)) ?? false;
+  }
+
+  Future<void> _markAlertSent(BudgetAlert alert) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_alertKey(alert), true);
+  }
+
+  String _alertKey(BudgetAlert alert) {
+    final budgetId = alert.budget.id ?? 0;
+    final periodStart = alert.status.periodStart.millisecondsSinceEpoch;
+    final type = _alertTypeKey(alert.alertType);
+    return '$_alertSentPrefix:$budgetId:$type:$periodStart';
+  }
+
+  String _alertTypeKey(BudgetAlertType type) {
+    switch (type) {
+      case BudgetAlertType.approaching:
+        return 'approaching';
+      case BudgetAlertType.exceeded:
+        return 'exceeded';
+    }
   }
 
   // Check and send notifications for all budget alerts
