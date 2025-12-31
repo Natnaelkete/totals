@@ -448,9 +448,10 @@ class _Wrapped2025PageState extends State<Wrapped2025Page> {
         value: totalFees == 0 ? 'ETB 0.00' : _formatCompactCurrency(totalFees),
         subtitle: summary.feeTransactionCount == 0
             ? 'No fees captured in $_wrappedYear.'
-            : 'You spent ${_formatCurrency(totalFees)} in fees across ${summary.feeTransactionCount} transactions.$feeDetailText',
+            : 'You spent ${_formatCurrency(totalFees)} in fees across ${summary.feeTransactionCount} transactions.',
         icon: Icons.receipt_long_rounded,
         accent: accents[10],
+        feesByBank: summary.feeTransactionCount > 0 ? summary.feesByBank : null,
       ),
       _WrappedSlideData(
         kicker: 'Balance',
@@ -773,37 +774,44 @@ class _Wrapped2025PageState extends State<Wrapped2025Page> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Container(
-                                  padding: const EdgeInsets.all(12),
+                                  padding: EdgeInsets.all(slide.feesByBank != null && slide.feesByBank!.isNotEmpty ? 10 : 12),
                                   decoration: BoxDecoration(
                                     color: slide.accent.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(16),
+                                    borderRadius: BorderRadius.circular(14),
                                   ),
                                   child: Icon(
                                     slide.icon,
                                     color: slide.accent,
-                                    size: 24,
+                                    size: slide.feesByBank != null && slide.feesByBank!.isNotEmpty ? 20 : 24,
                                   ),
                                 ),
-                                const SizedBox(height: 24),
+                                SizedBox(height: slide.feesByBank != null && slide.feesByBank!.isNotEmpty ? 14 : 20),
                                 Text(
                                   slide.value,
                                   style: TextStyle(
-                                    fontSize: 48,
+                                    fontSize: slide.feesByBank != null && slide.feesByBank!.isNotEmpty ? 36 : 48,
                                     fontWeight: FontWeight.w900,
                                     letterSpacing: -2,
                                     color: slide.accent,
                                   ),
                                 ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  slide.subtitle,
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    height: 1.5,
-                                    fontWeight: FontWeight.w500,
-                                    color: theme.colorScheme.onSurfaceVariant,
+                                const SizedBox(height: 8),
+                                if (slide.feesByBank != null && slide.feesByBank!.isNotEmpty)
+                                  _BankFeesBreakdown(
+                                    feesByBank: slide.feesByBank!,
+                                    accent: slide.accent,
+                                    formatCurrency: _formatCurrency,
+                                  )
+                                else
+                                  Text(
+                                    slide.subtitle,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      height: 1.5,
+                                      fontWeight: FontWeight.w500,
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                    ),
                                   ),
-                                ),
                                 if (slide.footnote != null) ...[
                                   const SizedBox(height: 24),
                                   Row(
@@ -949,6 +957,7 @@ class _WrappedSlideData {
   final IconData icon;
   final Color accent;
   final String? footnote;
+  final Map<String, _FeeBreakdown>? feesByBank;
 
   const _WrappedSlideData({
     required this.kicker,
@@ -958,6 +967,7 @@ class _WrappedSlideData {
     required this.icon,
     required this.accent,
     this.footnote,
+    this.feesByBank,
   });
 }
 
@@ -1195,6 +1205,153 @@ class _FeeBreakdown {
     required this.serviceCharge,
     required this.vat,
   });
+}
+
+class _BankFeesBreakdown extends StatelessWidget {
+  final Map<String, _FeeBreakdown> feesByBank;
+  final Color accent;
+  final String Function(double) formatCurrency;
+
+  const _BankFeesBreakdown({
+    required this.feesByBank,
+    required this.accent,
+    required this.formatCurrency,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final sortedBanks = feesByBank.entries.toList()
+      ..sort((a, b) {
+        final totalA = a.value.serviceCharge + a.value.vat;
+        final totalB = b.value.serviceCharge + b.value.vat;
+        return totalB.compareTo(totalA);
+      });
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ...sortedBanks.map((entry) {
+          final bankName = entry.key;
+          final breakdown = entry.value;
+          final totalFees = breakdown.serviceCharge + breakdown.vat;
+          
+          return Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface.withOpacity(0.5),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: accent.withOpacity(0.2),
+                width: 1,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        bankName,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: theme.colorScheme.onSurface,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      formatCurrency(totalFees),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                        color: accent,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _FeeItem(
+                        label: 'Service Charge',
+                        amount: breakdown.serviceCharge,
+                        formatCurrency: formatCurrency,
+                        color: accent.withOpacity(0.8),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _FeeItem(
+                        label: 'VAT',
+                        amount: breakdown.vat,
+                        formatCurrency: formatCurrency,
+                        color: accent.withOpacity(0.6),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+}
+
+class _FeeItem extends StatelessWidget {
+  final String label;
+  final double amount;
+  final String Function(double) formatCurrency;
+  final Color color;
+
+  const _FeeItem({
+    required this.label,
+    required this.amount,
+    required this.formatCurrency,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
+              letterSpacing: 0.3,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            formatCurrency(amount),
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _CategoryHighlight {
