@@ -1,6 +1,13 @@
+import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:totals/models/bank.dart';
 import 'package:totals/models/transaction.dart';
 import 'package:totals/providers/transaction_provider.dart';
@@ -48,7 +55,7 @@ class _StatsRecapPageState extends State<StatsRecapPage> {
         );
 
         return Scaffold(
-          backgroundColor: const Color(0xFF2B2C32),
+          backgroundColor: const Color(0xFF0F1014),
           body: StatsRecapContent(data: data),
         );
       },
@@ -56,7 +63,7 @@ class _StatsRecapPageState extends State<StatsRecapPage> {
   }
 }
 
-class StatsRecapContent extends StatelessWidget {
+class StatsRecapContent extends StatefulWidget {
   final StatsRecapData data;
 
   const StatsRecapContent({
@@ -65,112 +72,385 @@ class StatsRecapContent extends StatelessWidget {
   });
 
   @override
+  State<StatsRecapContent> createState() => _StatsRecapContentState();
+}
+
+class _StatsRecapContentState extends State<StatsRecapContent> {
+  final GlobalKey _repaintBoundaryKey = GlobalKey();
+  bool _isCapturing = false;
+
+  Future<void> _captureAndShare() async {
+    setState(() {
+      _isCapturing = true;
+    });
+
+    try {
+      // Wait a bit for UI to settle
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      final RenderRepaintBoundary boundary =
+          _repaintBoundaryKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+      final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+      final ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      final Uint8List pngBytes = byteData!.buffer.asUint8List();
+
+      // Save to temporary directory
+      final directory = await getTemporaryDirectory();
+      final imagePath = '${directory.path}/recap_${widget.data.year}_${DateTime.now().millisecondsSinceEpoch}.png';
+      final imageFile = File(imagePath);
+      await imageFile.writeAsBytes(pngBytes);
+
+      // Share the image
+      await Share.shareXFiles(
+        [XFile(imagePath)],
+        text: 'My ${widget.data.year} Totals Recap!',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error sharing recap: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCapturing = false;
+        });
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Color(0xFF2B2C32),
-            Color(0xFF1F2026),
-          ],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
+        color: Color(0xFF0F1014),
       ),
-      child: SafeArea(
-        child: Stack(
-          children: [
-            const Positioned(
-              right: 24,
-              top: 120,
-              child: _DotField(),
+      child: Stack(
+        children: [
+          // Background accents
+          Positioned(
+            top: -100,
+            right: -100,
+            child: _BlurredAccent(
+              color: const Color(0xFF2E6DF6).withOpacity(0.2),
+              size: 400,
             ),
-            SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Totals recap',
-                          style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white.withOpacity(0.95),
+          ),
+          Positioned(
+            bottom: -150,
+            left: -150,
+            child: _BlurredAccent(
+              color: const Color(0xFFFF5252).withOpacity(0.15),
+              size: 500,
+            ),
+          ),
+          
+          SafeArea(
+            child: Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(24, 32, 24, 100),
+                    child: RepaintBoundary(
+                      key: _repaintBoundaryKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'THE FULL RECAP',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 2,
+                                    color: Colors.white.withOpacity(0.4),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                const Text(
+                                  'Your Year in totals',
+                                  style: TextStyle(
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.white,
+                                    letterSpacing: -1,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.05),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.white.withOpacity(0.1)),
+                              ),
+                              child: Text(
+                                '${widget.data.year}',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 48),
+                        
+                        // Bank Section
+                        Center(
+                          child: Column(
+                            children: [
+                              Text(
+                                'MOST USED BANKS',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1.5,
+                                  color: Colors.white.withOpacity(0.3),
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              _BankCluster(banks: widget.data.topBanks),
+                            ],
                           ),
                         ),
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            data.monthLabel,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white.withOpacity(0.7),
-                            ),
+                        
+                        const SizedBox(height: 48),
+                        
+                        // Table-like sections for sent/received
+                        _ModernCounterpartyGrid(
+                          sentTo: widget.data.topSentTo,
+                          receivedFrom: widget.data.topReceivedFrom,
+                        ),
+                        
+                        const SizedBox(height: 48),
+                        
+                        // Footer
+                        Center(
+                          child: Column(
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'TOTALS WRAPPED',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 4,
+                                  color: Colors.white.withOpacity(0.2),
+                                ),
+                              ),
+                            ],
                           ),
-                          Text(
-                            '${data.year}',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white.withOpacity(0.6),
-                            ),
-                          ),
-                        ],
+                        ),
+                      ],
+                    ),
+                    ),
+                  ),
+                ),
+                // Save and Share Button
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F1014),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.3),
+                        blurRadius: 10,
+                        offset: const Offset(0, -5),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 28),
-                  Center(
-                    child: _BankCluster(banks: data.topBanks),
-                  ),
-                  const SizedBox(height: 28),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final isNarrow = constraints.maxWidth < 380;
-                      final children = [
+                  child: SafeArea(
+                    top: false,
+                    child: Row(
+                      children: [
                         Expanded(
-                          child: _CounterpartyColumn(
-                            title: 'Top sent to',
-                            entries: data.topSentTo,
+                          child: ElevatedButton.icon(
+                            onPressed: _isCapturing ? null : _captureAndShare,
+                            icon: _isCapturing
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                    ),
+                                  )
+                                : const Icon(Icons.share_rounded),
+                            label: Text(_isCapturing ? 'Preparing...' : 'Save & Share'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: const Color(0xFF0F1014),
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              elevation: 0,
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 16, height: 16),
-                        Expanded(
-                          child: _CounterpartyColumn(
-                            title: 'Top received from',
-                            entries: data.topReceivedFrom,
-                          ),
-                        ),
-                      ];
-
-                      if (isNarrow) {
-                        return Column(
-                          children: [
-                            children[0],
-                            const SizedBox(height: 20),
-                            children[2],
-                          ],
-                        );
-                      }
-
-                      return Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: children,
-                      );
-                    },
+                      ],
+                    ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BlurredAccent extends StatelessWidget {
+  final Color color;
+  final double size;
+
+  const _BlurredAccent({required this.color, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          colors: [color, color.withOpacity(0)],
+        ),
+      ),
+    );
+  }
+}
+
+class _ModernCounterpartyGrid extends StatelessWidget {
+  final List<StatsRecapEntry> sentTo;
+  final List<StatsRecapEntry> receivedFrom;
+
+  const _ModernCounterpartyGrid({
+    required this.sentTo,
+    required this.receivedFrom,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _buildSection(context, 'TOP TRANSFERRED TO', sentTo, const Color(0xFFFF5252)),
+        const SizedBox(height: 32),
+        _buildSection(context, 'TOP RECEIVED FROM', receivedFrom, const Color(0xFF00C853)),
+      ],
+    );
+  }
+
+  Widget _buildSection(BuildContext context, String title, List<StatsRecapEntry> entries, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.03),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1,
+                    color: Colors.white.withOpacity(0.6),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            if (entries.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(left: 20),
+                child: Text(
+                  'No data available for this year.',
+                  style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 13),
+                ),
+              )
+            else
+              ...entries.asMap().entries.map((e) => _buildEntryRow(e.key, e.value, color)),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildEntryRow(int index, StatsRecapEntry entry, Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 24,
+            child: Text(
+              '${index + 1}',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+                color: Colors.white.withOpacity(0.2),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              entry.label,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            'ETB ${formatNumberWithComma(entry.amount)}',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: color.withOpacity(0.8),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -347,55 +627,23 @@ class _BankCluster extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final placeholders = 3 - banks.length;
     return SizedBox(
-      height: 180,
-      width: 240,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          if (banks.length > 1)
-            Positioned(
-              right: 16,
-              top: 24,
-              child: _BankBubble(
-                bank: banks[1],
-                size: 84,
-              ),
-            ),
-          if (banks.length > 2)
-            Positioned(
-              left: 32,
-              bottom: 10,
-              child: _BankBubble(
-                bank: banks[2],
-                size: 70,
-              ),
-            ),
-          if (banks.isNotEmpty)
-            Positioned(
-              left: 0,
-              right: 0,
-              child: _BankBubble(
-                bank: banks[0],
-                size: 128,
-              ),
-            ),
-          if (banks.isEmpty)
-            _PlaceholderBubble(
-              size: 128,
-              label: 'Banks',
-            ),
-          if (placeholders > 0 && banks.isNotEmpty)
-            Positioned(
-              right: 20,
-              bottom: 16,
-              child: _PlaceholderBubble(
-                size: 68,
-                label: '',
-              ),
-            ),
-        ],
+      height: 140,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: List.generate(3, (index) {
+           if (index < banks.length) {
+             return Padding(
+               padding: const EdgeInsets.symmetric(horizontal: 10),
+               child: _BankBubble(bank: banks[index], size: index == 0 ? 100 : 70),
+             );
+           } else {
+             return Padding(
+               padding: const EdgeInsets.symmetric(horizontal: 10),
+               child: _PlaceholderBubble(size: 70, label: ''),
+             );
+           }
+        }),
       ),
     );
   }
@@ -418,14 +666,14 @@ class _BankBubble extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         border: Border.all(
-          color: Colors.white.withOpacity(0.18),
+          color: Colors.white.withOpacity(0.2),
           width: 2,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.25),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
+            color: Colors.black.withOpacity(0.4),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
@@ -455,118 +703,18 @@ class _PlaceholderBubble extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: Colors.white.withOpacity(0.08),
+        color: Colors.white.withOpacity(0.05),
         border: Border.all(
-          color: Colors.white.withOpacity(0.15),
+          color: Colors.white.withOpacity(0.1),
         ),
       ),
       child: Center(
         child: Text(
           label,
           style: TextStyle(
-            fontSize: 12,
+            fontSize: 10,
             fontWeight: FontWeight.w600,
-            color: Colors.white.withOpacity(0.7),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CounterpartyColumn extends StatelessWidget {
-  final String title;
-  final List<StatsRecapEntry> entries;
-
-  const _CounterpartyColumn({
-    required this.title,
-    required this.entries,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final titleStyle = TextStyle(
-      fontSize: 14,
-      fontWeight: FontWeight.w700,
-      color: Colors.white.withOpacity(0.85),
-    );
-    final emptyStyle = TextStyle(
-      fontSize: 12,
-      color: Colors.white.withOpacity(0.5),
-    );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: titleStyle),
-        const SizedBox(height: 12),
-        if (entries.isEmpty)
-          Text('No data yet', style: emptyStyle)
-        else
-          ...entries.asMap().entries.map((entry) {
-            final index = entry.key;
-            final item = entry.value;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${index + 1}.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white.withOpacity(0.8),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      item.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.white.withOpacity(0.85),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'ETB ${formatNumberWithComma(item.amount)}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.white.withOpacity(0.55),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-      ],
-    );
-  }
-}
-
-class _DotField extends StatelessWidget {
-  const _DotField();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 120,
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: List.generate(
-          28,
-          (index) => Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(index.isEven ? 0.12 : 0.2),
-              borderRadius: BorderRadius.circular(999),
-            ),
+            color: Colors.white.withOpacity(0.3),
           ),
         ),
       ),
