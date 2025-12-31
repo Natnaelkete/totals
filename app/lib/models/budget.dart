@@ -11,7 +11,7 @@ class Budget {
   final bool isActive;
   final DateTime createdAt;
   final DateTime? updatedAt;
-  final String? timeFrame; // 'daily', 'monthly', 'yearly', 'unlimited' - for category budgets
+  final String? timeFrame; // 'daily', 'monthly', 'yearly', 'never' - for category budgets
 
   Budget({
     this.id,
@@ -125,10 +125,14 @@ class Budget {
             return DateTime(now.year, now.month, 1);
           case 'yearly':
             return DateTime(now.year, 1, 1);
-          case 'unlimited':
-            // For unlimited, use the startDate of the budget
+          case 'never':
+            // For never, use the startDate of the budget
             return startDate;
           default:
+            // Handle legacy 'unlimited' value
+            if (frame == 'unlimited') {
+              return startDate;
+            }
             return DateTime(now.year, now.month, 1);
         }
       default:
@@ -157,10 +161,14 @@ class Budget {
             return nextMonth.subtract(const Duration(seconds: 1));
           case 'yearly':
             return DateTime(start.year, 12, 31, 23, 59, 59);
-          case 'unlimited':
-            // For unlimited, use endDate if set, otherwise return a far future date
+          case 'never':
+            // For never, use endDate if set, otherwise return a far future date
             return endDate ?? DateTime(2100, 12, 31, 23, 59, 59);
           default:
+            // Handle legacy 'unlimited' value
+            if (frame == 'unlimited') {
+              return endDate ?? DateTime(2100, 12, 31, 23, 59, 59);
+            }
             final nextMonth = DateTime(start.year, start.month + 1, 1);
             return nextMonth.subtract(const Duration(seconds: 1));
         }

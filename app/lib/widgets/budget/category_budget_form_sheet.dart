@@ -36,7 +36,18 @@ class _CategoryBudgetFormSheetState extends State<CategoryBudgetFormSheet> {
       _alertThresholdController.text =
           widget.budget!.alertThreshold.toStringAsFixed(1);
       _selectedCategoryId = widget.budget!.categoryId;
-      _selectedTimeFrame = widget.budget!.timeFrame ?? 'monthly';
+      // Ensure timeFrame is one of the valid options (daily, monthly, yearly, never)
+      final savedTimeFrame = widget.budget!.timeFrame ?? 'monthly';
+      if (['daily', 'monthly', 'yearly', 'never'].contains(savedTimeFrame)) {
+        _selectedTimeFrame = savedTimeFrame;
+      } else {
+        // Handle legacy 'unlimited' value by converting to 'never'
+        if (savedTimeFrame == 'unlimited') {
+          _selectedTimeFrame = 'never';
+        } else {
+          _selectedTimeFrame = 'monthly'; // Default to monthly if invalid
+        }
+      }
     }
   }
 
@@ -56,6 +67,8 @@ class _CategoryBudgetFormSheetState extends State<CategoryBudgetFormSheet> {
         return DateTime(now.year, now.month, 1);
       case 'yearly':
         return DateTime(now.year, 1, 1);
+      case 'never':
+        return DateTime.now();
       default:
         return DateTime.now();
     }
@@ -257,6 +270,7 @@ class _CategoryBudgetFormSheetState extends State<CategoryBudgetFormSheet> {
                   'daily': _buildSegmentText('Daily'),
                   'monthly': _buildSegmentText('Monthly'),
                   'yearly': _buildSegmentText('Yearly'),
+                  'never': _buildSegmentText('Never'),
                 },
                 onValueChanged: (val) {
                   HapticFeedback.selectionClick();
