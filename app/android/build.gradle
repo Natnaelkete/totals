@@ -32,19 +32,25 @@ subprojects {
 subprojects {
     project.evaluationDependsOn(':app')
 
-    afterEvaluate { project ->
-        if (project.hasProperty('android')) {
-            if (project.android.getNamespace() == null) {
-                def manifestFile = project.file('src/main/AndroidManifest.xml')
+    def applyNamespaceWorkaround = { proj ->
+        if (proj.hasProperty('android')) {
+            if (proj.android.getNamespace() == null) {
+                def manifestFile = proj.file('src/main/AndroidManifest.xml')
                 if (manifestFile.exists()) {
                     def manifest = new XmlParser().parse(manifestFile)
                     def packageName = manifest.attribute('package')
                     if (packageName) {
-                        project.android.namespace = packageName
+                        proj.android.namespace = packageName
                     }
                 }
             }
         }
+    }
+
+    if (project.state.executed) {
+        applyNamespaceWorkaround(project)
+    } else {
+        project.afterEvaluate { applyNamespaceWorkaround(it) }
     }
 }
 
