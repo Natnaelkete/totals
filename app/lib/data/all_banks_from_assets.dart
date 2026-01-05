@@ -309,6 +309,16 @@ class AllBanksFromAssets {
         maskPattern: 4,
         uniformMasking: true,
       ),
+      Bank(
+        id: 35,
+        name: "YaYa Wallet",
+        shortName: "YAYA",
+        codes: ["YAYA", "YaYa", "Yaya", "YaYa Wallet"],
+        image: "assets/images/logo-text.png",
+        maskPattern: 0,
+        uniformMasking: false,
+        simBased: true,
+      ),
     ];
   }
 }
