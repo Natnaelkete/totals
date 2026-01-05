@@ -1,5 +1,5 @@
 buildscript {
-    ext.kotlin_version = '1.9.22'
+    ext.kotlin_version = '2.1.0'
     repositories {
         google()
         mavenCentral()
@@ -31,6 +31,21 @@ subprojects {
 }
 subprojects {
     project.evaluationDependsOn(':app')
+
+    afterEvaluate { project ->
+        if (project.hasProperty('android')) {
+            if (project.android.getNamespace() == null) {
+                def manifestFile = project.file('src/main/AndroidManifest.xml')
+                if (manifestFile.exists()) {
+                    def manifest = new XmlParser().parse(manifestFile)
+                    def packageName = manifest.attribute('package')
+                    if (packageName) {
+                        project.android.namespace = packageName
+                    }
+                }
+            }
+        }
+    }
 }
 
 tasks.register("clean", Delete) {
