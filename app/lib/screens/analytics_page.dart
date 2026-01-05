@@ -488,8 +488,12 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     List<Transaction> allTransactions,
     AccountSummary? selectedAccount,
   ) {
+    final provider = Provider.of<TransactionProvider>(context, listen: false);
     final filtered = <Transaction>[];
     for (final transaction in allTransactions) {
+      if (provider.isSelfTransfer(transaction)) {
+        continue;
+      }
       if (_selectedCard == 'Income' && transaction.type != 'CREDIT') {
         continue;
       }
